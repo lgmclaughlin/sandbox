@@ -2,9 +2,13 @@
 
 import typer
 
+from cli.lib.config import get_log_dir
 from cli.lib.firewall import (
     add_domain,
+    apply_profile,
     apply_rules,
+    list_profiles,
+    read_firewall_logs,
     read_whitelist,
     remove_domain,
     validate_domain,
@@ -61,6 +65,59 @@ def remove(
 def apply() -> None:
     """Re-apply firewall rules from current whitelist."""
     _apply_and_report()
+
+
+@app.command()
+def profiles() -> None:
+    """List available firewall profiles."""
+    available = list_profiles()
+    if not available:
+        typer.echo("No firewall profiles found.")
+        return
+
+    for p in available:
+        domain_count = len(p.get("domains", []))
+        desc = p.get("description", "")
+        typer.echo(f"  {p['name']}: {desc} ({domain_count} domains)")
+
+
+@app.command()
+def profile(
+    name: str = typer.Argument(..., help="Profile name to apply"),
+) -> None:
+    """Apply a firewall profile."""
+    ok, message = apply_profile(name)
+    if not ok:
+        typer.echo(typer.style(f"error: {message}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    typer.echo(message)
+    _apply_and_report()
+
+
+@app.command(name="logs")
+def fw_logs(
+    action: str = typer.Option("all", "--action", "-a", help="Filter: all, allow, block"),
+    lines: int = typer.Option(20, "--lines", "-n", help="Number of entries to show"),
+) -> None:
+    """View firewall connection logs."""
+    log_dir = get_log_dir()
+    entries = read_firewall_logs(log_dir, action=action, lines=lines)
+
+    if not entries:
+        typer.echo("No firewall logs found.")
+        return
+
+    for entry in entries:
+        ts = entry.get("timestamp", "?")
+        act = entry.get("action", "?")
+        dst = entry.get("dst", "?")
+        port = entry.get("port", "?")
+        proto = entry.get("proto", "?")
+
+        color = typer.colors.GREEN if act == "allow" else typer.colors.RED
+        act_styled = typer.style(act.upper(), fg=color)
+        typer.echo(f"  [{ts}] {act_styled} {dst}:{port} ({proto})")
 
 
 def _apply_and_report() -> None:

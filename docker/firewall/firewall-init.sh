@@ -71,9 +71,12 @@ iptables -A INPUT   -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A OUTPUT  -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
 
+iptables -A OUTPUT  -m set --match-set git-domains dst -j LOG --log-prefix "SBX_ALLOW " --log-level 4 2>/dev/null || true
 iptables -A OUTPUT  -m set --match-set git-domains dst -j ACCEPT
+iptables -A OUTPUT  -m set --match-set allowed-domains dst -j LOG --log-prefix "SBX_ALLOW " --log-level 4 2>/dev/null || true
 iptables -A OUTPUT  -m set --match-set allowed-domains dst -j ACCEPT
 
+iptables -A OUTPUT -j LOG --log-prefix "SBX_BLOCK " --log-level 4 2>/dev/null || true
 iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
 iptables -A FORWARD -j REJECT --reject-with icmp-admin-prohibited
 

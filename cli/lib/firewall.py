@@ -1,11 +1,16 @@
 """Firewall management operations."""
 
+import json
 import re
 from pathlib import Path
 
-WHITELIST_FILE = Path(__file__).parent.parent.parent / "docker" / "firewall" / "whitelist.txt"
+import yaml
 
-# Simple domain validation pattern
+from cli.lib.config import PROJECT_ROOT
+
+WHITELIST_FILE = PROJECT_ROOT / "docker" / "firewall" / "whitelist.txt"
+PROFILES_DIR = PROJECT_ROOT / "config" / "firewall" / "profiles"
+
 DOMAIN_PATTERN = re.compile(
     r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
 )
@@ -80,3 +85,73 @@ def merge_tool_domains(tool_domains: list[str]) -> None:
         if domain not in domains:
             domains.append(domain)
     write_whitelist(domains)
+
+
+# --- Profiles ---
+
+def list_profiles() -> list[dict]:
+    """List available firewall profiles."""
+    if not PROFILES_DIR.exists():
+        return []
+
+    profiles = []
+    for f in sorted(PROFILES_DIR.glob("*.yaml")):
+        try:
+            data = yaml.safe_load(f.read_text())
+            if data:
+                profiles.append(data)
+        except yaml.YAMLError:
+            continue
+    return profiles
+
+
+def load_profile(name: str) -> dict | None:
+    """Load a firewall profile by name."""
+    profile_file = PROFILES_DIR / f"{name}.yaml"
+    if not profile_file.exists():
+        return None
+    return yaml.safe_load(profile_file.read_text())
+
+
+def apply_profile(name: str) -> tuple[bool, str]:
+    """Apply a firewall profile. Replaces whitelist with profile domains + tool domains."""
+    profile = load_profile(name)
+    if not profile:
+        return False, f"Profile '{name}' not found"
+
+    profile_domains = profile.get("domains", [])
+
+    from cli.lib.config import list_available_tools
+    tool_domains = set()
+    for tool in list_available_tools():
+        for d in tool.get("firewall", {}).get("domains", []):
+            tool_domains.add(d)
+
+    merged = list(dict.fromkeys(profile_domains + sorted(tool_domains)))
+    write_whitelist(merged)
+
+    return True, f"Applied profile '{name}' ({len(merged)} domains)"
+
+
+# --- Firewall logging ---
+
+def read_firewall_logs(log_dir: Path, action: str = "all", lines: int = 50) -> list[dict]:
+    """Read firewall log entries from the audit volume."""
+    fw_log_dir = log_dir / "firewall"
+    if not fw_log_dir.exists():
+        return []
+
+    entries = []
+    for log_file in sorted(fw_log_dir.rglob("*.jsonl"), reverse=True):
+        for line in reversed(log_file.read_text().splitlines()):
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+                if action == "all" or entry.get("action") == action:
+                    entries.append(entry)
+                    if len(entries) >= lines:
+                        return entries
+            except json.JSONDecodeError:
+                continue
+    return entries

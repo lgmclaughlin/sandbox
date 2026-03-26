@@ -10,6 +10,8 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    volumes:
+      - ${SANDBOX_LOG_DIR:-../logs}:/var/log/sandbox:rw
     stdin_open: true
     tty: true
     restart: unless-stopped
