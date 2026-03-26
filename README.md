@@ -4,13 +4,16 @@ Secure, auditable execution environment for LLM-based development tools.
 
 Run AI coding assistants (Claude Code, Aider, etc.) inside a locked-down container with network controls, session logging, and compliance checks.
 
-## Features (Phase 1 in progress)
+## Features
 
 - **Isolated runtime**: Non-root container with separate firewall container
 - **Network control**: Domain whitelist firewall that blocks unauthorized outbound traffic
 - **Audit logging**: Terminal session recording, command history, user identity capture
 - **Tool management**: Install/switch AI tools via CLI, each with its own dependencies and firewall rules
+- **Secrets management**: Encrypted local storage or environment variable injection for API keys
+- **Environment profiles**: Switch between dev, corp, and custom configurations
 - **Zero-config start**: Clone, run `sandbox start`, and get a working environment with sensible defaults
+- **Cross-platform**: Linux, macOS, and Windows support
 
 ## Quick start
 
@@ -25,28 +28,58 @@ sandbox start
 ## CLI
 
 ```
-sandbox start|stop|restart|rebuild|status|attach
-sandbox fw ls|add|remove|apply
-sandbox tool list|install|remove
-sandbox logs|check
+Lifecycle       sandbox start|stop|restart|rebuild|status|attach
+Firewall        sandbox fw ls|add|remove|apply
+Tools           sandbox tool list|install|remove
+Secrets         sandbox secrets set|get|list|delete
+Config          sandbox config show|profiles
+Observability   sandbox logs|check|rotate
 ```
+
+### Examples
+
+```bash
+sandbox start                       # Start with defaults
+sandbox start --env=corp            # Start with corporate profile
+sandbox fw add api.example.com      # Whitelist a domain
+sandbox tool install aider          # Install a tool
+sandbox secrets set API_KEY sk-...  # Store a secret
+sandbox config show                 # View merged configuration
+sandbox check                       # Run compliance checks
+```
+
+## Configuration
+
+| File | Purpose |
+|------|---------|
+| `.env.dist` | Default configuration (committed) |
+| `.env` | Local overrides (gitignored, auto-created) |
+| `.env.{profile}` | Profile-specific config (e.g., `.env.corp`) |
+| `config/tools/` | AI tool definitions |
+| `config/mounts.yaml` | Remote mount definitions (rclone/sshfs) |
 
 ## Project structure
 
 ```
 cli/                  # Python CLI (typer)
-config/               # mounts.yaml, tools/
+  commands/           # CLI command modules
+  lib/                # Core libraries (config, docker, firewall, secrets)
+config/               # Tool definitions, mount config
 docker/               # Dockerfiles, compose, firewall scripts
-docs/                 # DLP.md, etc.
-test/                 # pytest
+test/                 # pytest (unit + integration)
 logs/                 # Audit trail (gitignored)
+```
+
+## Development
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
 ## Testing
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
 pytest              # Run all tests
 pytest test/unit    # Unit tests only
 pytest -v           # Verbose output
