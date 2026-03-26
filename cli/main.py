@@ -71,6 +71,12 @@ def logs_cmd(
 
 
 @app.command()
+def rotate() -> None:
+    """Rotate and clean up old logs based on retention policy."""
+    logs.rotate_logs()
+
+
+@app.command()
 def version() -> None:
     """Show version information."""
     typer.echo(f"sandbox version {__version__}")

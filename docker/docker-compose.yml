@@ -1,0 +1,42 @@
+services:
+  firewall:
+    build:
+      context: ./firewall
+      dockerfile: Dockerfile_firewall
+    container_name: ${COMPOSE_PROJECT_NAME:-project}_firewall
+    network_mode: bridge
+    security_opt:
+      - no-new-privileges:false
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  sandbox:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        TZ: ${TZ:-UTC}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+        CUSTOM_CA_CERT_PATH: ${CUSTOM_CA_CERT_PATH:-}
+    container_name: ${COMPOSE_PROJECT_NAME:-project}_sandbox
+    network_mode: "service:firewall"
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    volumes:
+      - ../workspace:/workspace:rw,delegated
+      - ${SANDBOX_LOG_DIR:-../logs}:/var/log/sandbox:rw
+    security_opt:
+      - no-new-privileges:true
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "whoami | grep -v root"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

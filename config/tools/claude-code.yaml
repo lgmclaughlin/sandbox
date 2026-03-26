@@ -1,0 +1,21 @@
+# Claude Code tool definition
+name: claude-code
+description: Anthropic's CLI for Claude
+default: true
+
+install:
+  method: npm
+  package: "@anthropic-ai/claude-code"
+  global: true
+
+firewall:
+  domains:
+    - api.anthropic.com
+    - registry.npmjs.org
+
+env:
+  ANTHROPIC_API_KEY: ""
+
+volumes:
+  - container: /home/node/.claude
+    named: claude_config
