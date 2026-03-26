@@ -22,6 +22,7 @@ from cli.lib.docker import (
     stop_containers,
 )
 from cli.lib.firewall import merge_tool_domains
+from cli.lib.mcp import get_enabled_servers, get_mcp_domains, write_mcp_config
 from cli.lib.mounts import setup_mounts, unmount_all
 from cli.lib.platform import check_docker
 from cli.lib.secrets import get_secrets_for_container
@@ -52,6 +53,16 @@ def start(attach: bool = True, env_profile: str = "") -> None:
         if domains:
             typer.echo(f"Merging firewall domains for {default_tool['name']}...")
             merge_tool_domains(domains)
+
+    mcp_servers = get_enabled_servers()
+    if mcp_servers:
+        typer.echo(f"Configuring {len(mcp_servers)} MCP server(s)...")
+        mcp_domains = get_mcp_domains()
+        if mcp_domains:
+            merge_tool_domains(mcp_domains)
+        config_path = write_mcp_config()
+        if config_path:
+            typer.echo(f"  MCP config written to {config_path}")
 
     mounts = load_mounts()
     if mounts:

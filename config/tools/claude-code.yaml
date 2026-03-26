@@ -16,6 +16,9 @@ firewall:
 env:
   ANTHROPIC_API_KEY: ""
 
+mcp:
+  config_path: /home/node/.claude/mcp-config.json
+
 volumes:
   - container: /home/node/.claude
     named: claude_config

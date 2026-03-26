@@ -3,7 +3,7 @@
 import typer
 
 from cli import __version__
-from cli.commands import config_cmd, firewall, lifecycle, logs, secrets, tools
+from cli.commands import config_cmd, firewall, lifecycle, logs, mcp, secrets, tools
 
 app = typer.Typer(
     name="sandbox",
@@ -14,6 +14,7 @@ app = typer.Typer(
 
 app.add_typer(firewall.app, name="fw", help="Firewall management")
 app.add_typer(tools.app, name="tool", help="Tool management")
+app.add_typer(mcp.app, name="mcp", help="MCP server management")
 app.add_typer(secrets.app, name="secrets", help="Secrets management")
 app.add_typer(config_cmd.app, name="config", help="Configuration management")
 
