@@ -68,15 +68,22 @@ def logs_cmd(
     log_type: str = typer.Argument("all", help="Log type: sessions, commands, or all"),
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
     lines: int = typer.Option(50, "--lines", "-n", help="Number of lines to show"),
+    session: str = typer.Option("", "--session", "-s", help="View all events for a session ID"),
 ) -> None:
     """View audit logs."""
-    logs.view(log_type=log_type, follow=follow, lines=lines)
+    logs.view(log_type=log_type, follow=follow, lines=lines, session_id=session)
 
 
 @app.command()
 def rotate() -> None:
     """Rotate and clean up old logs based on retention policy."""
     logs.rotate_logs()
+
+
+@app.command(name="summary")
+def logs_summary() -> None:
+    """Show high-level log summary."""
+    logs.summary()
 
 
 @app.command()
