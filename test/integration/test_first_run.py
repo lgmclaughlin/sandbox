@@ -26,8 +26,10 @@ class TestFirstRunFlow:
         log_dir = tmp_project / "logs"
         monkeypatch.setattr("cli.lib.config.CONFIG_DIR", tmp_project / "config")
         monkeypatch.setattr("cli.lib.config.TOOLS_DIR", tmp_project / "config" / "tools")
+        monkeypatch.setattr("cli.lib.config.PROJECT_ROOT", tmp_project)
         monkeypatch.setattr("cli.lib.config.DEFAULT_LOG_DIR", log_dir)
         monkeypatch.setattr("cli.lib.config.ENV_FILE", tmp_project / ".env")
+        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", tmp_project / ".env.dist")
 
         ensure_config_dirs()
 

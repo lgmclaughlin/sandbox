@@ -51,8 +51,13 @@ def _compose_cmd() -> list[str]:
 def _compose_env() -> dict[str, str]:
     """Build environment for docker compose commands."""
     env = {**os.environ, **load_env()}
-    env.setdefault("USER_ID", str(os.getuid()))
-    env.setdefault("GROUP_ID", str(os.getgid()))
+    try:
+        env.setdefault("USER_ID", str(os.getuid()))
+        env.setdefault("GROUP_ID", str(os.getgid()))
+    except AttributeError:
+        # Windows: no getuid/getgid, default to 1000
+        env.setdefault("USER_ID", "1000")
+        env.setdefault("GROUP_ID", "1000")
     return env
 
 
@@ -62,9 +67,13 @@ def is_running(service: str) -> bool:
     return container is not None and container.status == "running"
 
 
-def start_containers(build: bool = False) -> None:
+def start_containers(build: bool = False, secrets: dict[str, str] | None = None) -> None:
     """Start firewall and sandbox containers."""
     env = _compose_env()
+
+    if secrets:
+        env.update(secrets)
+
     base = _compose_cmd()
 
     if not is_running(FIREWALL_SERVICE):

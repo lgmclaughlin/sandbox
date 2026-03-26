@@ -2,10 +2,13 @@
 
 import typer
 
+import os
+
 from cli.lib.config import (
     ensure_config_dirs,
     ensure_env,
     ensure_mounts_config,
+    get_active_profile,
     get_default_tool,
     list_available_tools,
     load_mounts,
@@ -21,19 +24,27 @@ from cli.lib.docker import (
 from cli.lib.firewall import merge_tool_domains
 from cli.lib.mounts import setup_mounts, unmount_all
 from cli.lib.platform import check_docker
+from cli.lib.secrets import get_secrets_for_container
 
 
-def start(attach: bool = True) -> None:
+def start(attach: bool = True, env_profile: str = "") -> None:
     """Start the sandbox environment."""
     docker_err = check_docker()
     if docker_err:
         typer.echo(typer.style(f"error: {docker_err}", fg=typer.colors.RED), err=True)
         raise typer.Exit(1)
 
+    if env_profile:
+        os.environ["SANDBOX_ENV"] = env_profile
+
     typer.echo("Initializing configuration...")
     env = ensure_env()
     ensure_config_dirs()
     ensure_mounts_config()
+
+    profile = get_active_profile()
+    if profile:
+        typer.echo(f"Using profile: {profile}")
 
     default_tool = get_default_tool()
     if default_tool:
@@ -53,8 +64,12 @@ def start(attach: bool = True) -> None:
                 typer.echo(typer.style(f"  {r['name']}: {r['error']}",
                                        fg=typer.colors.YELLOW), err=True)
 
+    container_secrets = get_secrets_for_container()
+    if container_secrets:
+        typer.echo(f"Injecting {len(container_secrets)} secret(s) into container...")
+
     typer.echo("Starting containers...")
-    start_containers(build=not is_running("firewall"))
+    start_containers(build=not is_running("firewall"), secrets=container_secrets)
 
     typer.echo(typer.style("Sandbox is running.", fg=typer.colors.GREEN))
 

@@ -115,11 +115,37 @@ def _windows_tz_to_iana(windows_tz: str) -> str:
 
 
 def load_env() -> dict[str, str]:
-    """Load environment variables from .env file."""
-    if not ENV_FILE.exists():
-        return {}
-    values = dotenv_values(ENV_FILE)
-    return {k: v for k, v in values.items() if v is not None}
+    """Load environment variables with profile merging.
+
+    Merge order: .env.dist -> .env.{profile} -> .env -> CLI overrides
+    """
+    result = {}
+
+    if ENV_DIST_FILE.exists():
+        for k, v in dotenv_values(ENV_DIST_FILE).items():
+            if v is not None:
+                result[k] = v
+
+    if ENV_FILE.exists():
+        for k, v in dotenv_values(ENV_FILE).items():
+            if v is not None:
+                result[k] = v
+
+    profile = result.get("SANDBOX_ENV") or os.environ.get("SANDBOX_ENV", "")
+    if profile:
+        profile_file = PROJECT_ROOT / f".env.{profile}"
+        if profile_file.exists():
+            for k, v in dotenv_values(profile_file).items():
+                if v is not None:
+                    result[k] = v
+
+    return result
+
+
+def get_active_profile() -> str:
+    """Get the active environment profile name, or empty string."""
+    env = load_env()
+    return env.get("SANDBOX_ENV", "")
 
 
 def ensure_mounts_config() -> None:

@@ -44,7 +44,12 @@ htmlcov/
 
 # Environment
 .env
+.env.*
+!.env.dist
 *.local
+
+# Secrets
+.secrets/
 
 # Logs (audit logs are in ./logs/ which we want to ignore locally)
 logs/

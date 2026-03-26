@@ -26,7 +26,9 @@ class TestLoadEnv:
 
     def test_load_missing(self, tmp_path, monkeypatch):
         env_file = tmp_path / ".env"
+        dist_file = tmp_path / ".env.dist"
         monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
+        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", dist_file)
 
         assert load_env() == {}
 

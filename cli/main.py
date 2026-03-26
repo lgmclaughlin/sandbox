@@ -3,7 +3,7 @@
 import typer
 
 from cli import __version__
-from cli.commands import firewall, lifecycle, logs, tools
+from cli.commands import config_cmd, firewall, lifecycle, logs, secrets, tools
 
 app = typer.Typer(
     name="sandbox",
@@ -14,14 +14,17 @@ app = typer.Typer(
 
 app.add_typer(firewall.app, name="fw", help="Firewall management")
 app.add_typer(tools.app, name="tool", help="Tool management")
+app.add_typer(secrets.app, name="secrets", help="Secrets management")
+app.add_typer(config_cmd.app, name="config", help="Configuration management")
 
 
 @app.command()
 def start(
     attach: bool = typer.Option(True, "--attach/--no-attach", help="Attach to shell after start"),
+    env: str = typer.Option("", "--env", "-e", help="Environment profile to use"),
 ) -> None:
     """Start the sandbox environment."""
-    lifecycle.start(attach=attach)
+    lifecycle.start(attach=attach, env_profile=env)
 
 
 @app.command()
