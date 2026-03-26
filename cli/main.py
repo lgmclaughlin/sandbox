@@ -1,5 +1,8 @@
 """Main CLI entry point."""
 
+import os
+from typing import Optional
+
 import typer
 
 from cli import __version__
@@ -19,13 +22,39 @@ app.add_typer(secrets.app, name="secrets", help="Secrets management")
 app.add_typer(config_cmd.app, name="config", help="Configuration management")
 
 
+@app.callback()
+def main_callback(
+    project: Optional[str] = typer.Option(
+        None, "--project", "-p", help="Project name to operate on",
+        envvar="SANDBOX_PROJECT",
+    ),
+) -> None:
+    """Resolve active project before any command runs."""
+    if project:
+        from cli.lib.config import set_active_project
+        from cli.lib.project import get_project_dir
+        if not get_project_dir(project).exists():
+            typer.echo(typer.style(
+                f"error: Project '{project}' not found. Run 'sandbox init {project}' first.",
+                fg=typer.colors.RED), err=True)
+            raise typer.Exit(1)
+        set_active_project(project)
+    else:
+        from cli.lib.project import get_active_project
+        from cli.lib.config import set_active_project
+        auto = get_active_project()
+        if auto:
+            set_active_project(auto)
+
+
 @app.command()
 def start(
+    workspace: Optional[str] = typer.Argument(None, help="Workspace directory to mount (default: current directory)"),
     attach: bool = typer.Option(True, "--attach/--no-attach", help="Attach to shell after start"),
     env: str = typer.Option("", "--env", "-e", help="Environment profile to use"),
 ) -> None:
     """Start the sandbox environment."""
-    lifecycle.start(attach=attach, env_profile=env)
+    lifecycle.start(attach=attach, env_profile=env, workspace=workspace)
 
 
 @app.command()
@@ -85,6 +114,39 @@ def rotate() -> None:
 def logs_summary() -> None:
     """Show high-level log summary."""
     logs.summary()
+
+
+@app.command()
+def init(
+    name: str = typer.Argument(..., help="Project name to initialize"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Workspace directory to use"),
+) -> None:
+    """Initialize a new project."""
+    from cli.lib.project import init_project
+    try:
+        path = init_project(name, workspace=workspace)
+        typer.echo(typer.style(f"Project '{name}' initialized at {path}", fg=typer.colors.GREEN))
+        typer.echo(f"  Use: sandbox --project {name} start")
+    except ValueError as e:
+        typer.echo(typer.style(f"error: {e}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+
+@app.command(name="projects")
+def list_projects() -> None:
+    """List all initialized projects."""
+    from cli.lib.project import list_projects as _list_projects
+    from cli.lib.config import get_active_project_name
+    projects = _list_projects()
+    active = get_active_project_name()
+
+    if not projects:
+        typer.echo("No projects initialized. Use 'sandbox init <name>' to create one.")
+        return
+
+    for p in projects:
+        marker = " (active)" if p["name"] == active else ""
+        typer.echo(f"  {p['name']}{marker}")
 
 
 @app.command()

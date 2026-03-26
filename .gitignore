@@ -51,6 +51,9 @@ htmlcov/
 # Secrets
 .secrets/
 
+# Projects (user-created, not committed)
+projects/
+
 # Logs (audit logs are in ./logs/ which we want to ignore locally)
 logs/
 

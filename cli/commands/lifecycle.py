@@ -1,14 +1,16 @@
 """Container lifecycle commands: start, stop, restart, rebuild, status, attach."""
 
-import typer
-
 import os
+from pathlib import Path
+
+import typer
 
 from cli.lib.config import (
     ensure_config_dirs,
     ensure_env,
     ensure_mounts_config,
     get_active_profile,
+    get_active_project_name,
     get_default_tool,
     list_available_tools,
     load_mounts,
@@ -28,7 +30,7 @@ from cli.lib.platform import check_docker
 from cli.lib.secrets import get_secrets_for_container
 
 
-def start(attach: bool = True, env_profile: str = "") -> None:
+def start(attach: bool = True, env_profile: str = "", workspace: str | None = None) -> None:
     """Start the sandbox environment."""
     docker_err = check_docker()
     if docker_err:
@@ -37,6 +39,15 @@ def start(attach: bool = True, env_profile: str = "") -> None:
 
     if env_profile:
         os.environ["SANDBOX_ENV"] = env_profile
+
+    workspace_path = Path(workspace or ".").resolve()
+    if not workspace_path.is_dir():
+        typer.echo(typer.style(f"error: Workspace directory not found: {workspace_path}",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    os.environ["SANDBOX_WORKSPACE_DIR"] = str(workspace_path)
+    typer.echo(f"Workspace: {workspace_path}")
 
     typer.echo("Initializing configuration...")
     env = ensure_env()
@@ -130,6 +141,11 @@ def status() -> None:
     statuses = get_status()
     tools = list_available_tools()
     mounts = load_mounts()
+    project = get_active_project_name()
+
+    if project:
+        typer.echo(typer.style(f"Project: {project}", bold=True))
+        typer.echo("")
 
     typer.echo(typer.style("Containers:", bold=True))
     for service, info in statuses.items():

@@ -9,10 +9,12 @@ from pathlib import Path
 import yaml
 from dotenv import dotenv_values, set_key
 
+from cli.lib.platform import PLATFORM
+
 # Project root (relative to this file)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
-# Config paths
+# Config paths (updated by set_active_project)
 CONFIG_DIR = PROJECT_ROOT / "config"
 MOUNTS_FILE = CONFIG_DIR / "mounts.yaml"
 TOOLS_DIR = CONFIG_DIR / "tools"
@@ -22,7 +24,34 @@ ENV_DIST_FILE = PROJECT_ROOT / ".env.dist"
 # Log paths
 DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
 
-from cli.lib.platform import PLATFORM
+# Active project name (empty = root-level config)
+_active_project = ""
+
+
+def set_active_project(name: str) -> None:
+    """Set the active project, updating all config paths."""
+    global CONFIG_DIR, MOUNTS_FILE, TOOLS_DIR, ENV_FILE, DEFAULT_LOG_DIR, _active_project
+
+    _active_project = name
+
+    if not name:
+        CONFIG_DIR = PROJECT_ROOT / "config"
+        MOUNTS_FILE = CONFIG_DIR / "mounts.yaml"
+        TOOLS_DIR = CONFIG_DIR / "tools"
+        ENV_FILE = PROJECT_ROOT / ".env"
+        DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
+    else:
+        project_dir = PROJECT_ROOT / "projects" / name
+        CONFIG_DIR = project_dir / "config"
+        MOUNTS_FILE = CONFIG_DIR / "mounts.yaml"
+        TOOLS_DIR = CONFIG_DIR / "tools"
+        ENV_FILE = project_dir / ".env"
+        DEFAULT_LOG_DIR = project_dir / "logs"
+
+
+def get_active_project_name() -> str:
+    """Get the currently active project name."""
+    return _active_project
 
 
 def get_log_dir() -> Path:

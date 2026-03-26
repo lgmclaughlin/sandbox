@@ -8,7 +8,7 @@ from pathlib import Path
 import docker
 from docker.errors import DockerException, NotFound
 
-from cli.lib.config import PROJECT_ROOT, load_env
+from cli.lib.config import PROJECT_ROOT, load_env, get_active_project_name, DEFAULT_LOG_DIR
 
 COMPOSE_FILE = PROJECT_ROOT / "docker" / "docker-compose.yml"
 FIREWALL_SERVICE = "firewall"
@@ -48,14 +48,40 @@ def _compose_cmd() -> list[str]:
     ]
 
 
+def _workspace_dir() -> Path:
+    """Get the workspace directory.
+
+    Resolution order:
+    1. SANDBOX_WORKSPACE_DIR env var (set by CLI or project .env)
+    2. Project-specific workspace directory
+    3. Root-level workspace/
+    """
+    from_env = os.environ.get("SANDBOX_WORKSPACE_DIR", "")
+    if from_env:
+        return Path(from_env).resolve()
+
+    env = load_env()
+    from_config = env.get("SANDBOX_WORKSPACE_DIR", "")
+    if from_config:
+        path = Path(from_config)
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
+    project = get_active_project_name()
+    if project:
+        return PROJECT_ROOT / "projects" / project / "workspace"
+    return PROJECT_ROOT / "workspace"
+
+
 def _compose_env() -> dict[str, str]:
     """Build environment for docker compose commands."""
+    from cli.lib.config import DEFAULT_LOG_DIR
     env = {**os.environ, **load_env()}
+    env["SANDBOX_WORKSPACE_DIR"] = str(_workspace_dir())
+    env["SANDBOX_LOG_DIR"] = str(DEFAULT_LOG_DIR)
     try:
         env.setdefault("USER_ID", str(os.getuid()))
         env.setdefault("GROUP_ID", str(os.getgid()))
     except AttributeError:
-        # Windows: no getuid/getgid, default to 1000
         env.setdefault("USER_ID", "1000")
         env.setdefault("GROUP_ID", "1000")
     return env
