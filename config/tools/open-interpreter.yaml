@@ -1,0 +1,23 @@
+name: open-interpreter
+description: Natural language interface for your computer
+default: false
+
+install:
+  method: pip
+  package: open-interpreter
+  global: false
+
+mcp:
+  config_path: ""
+
+firewall:
+  domains:
+    - api.openai.com
+    - api.anthropic.com
+    - pypi.org
+    - files.pythonhosted.org
+
+env:
+  OPENAI_API_KEY: ""
+
+volumes: []

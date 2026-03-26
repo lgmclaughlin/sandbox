@@ -1,5 +1,6 @@
 """Platform detection and compatibility helpers."""
 
+import os
 import shutil
 import platform
 
@@ -30,6 +31,16 @@ def check_sshfs() -> bool:
     """Check if sshfs is available on the host."""
     cmd = "sshfs.exe" if IS_WINDOWS else "sshfs"
     return shutil.which(cmd) is not None
+
+
+def is_verbose() -> bool:
+    """Check if verbose output is enabled."""
+    return os.environ.get("SANDBOX_VERBOSE") == "1"
+
+
+def is_quiet() -> bool:
+    """Check if quiet mode is enabled."""
+    return os.environ.get("SANDBOX_QUIET") == "1"
 
 
 def get_user_info() -> dict[str, str]:

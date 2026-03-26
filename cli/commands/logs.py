@@ -9,6 +9,31 @@ import typer
 from cli.lib.config import get_log_dir, load_env
 from cli.lib.docker import is_running
 
+app = typer.Typer(no_args_is_help=True)
+
+
+@app.command(name="view")
+def view_cmd(
+    log_type: str = typer.Argument("all", help="Log type: sessions, commands, or all"),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
+    lines: int = typer.Option(50, "--lines", "-n", help="Number of lines to show"),
+    session: str = typer.Option("", "--session", "-s", help="View all events for a session ID"),
+) -> None:
+    """View audit logs."""
+    view(log_type=log_type, follow=follow, lines=lines, session_id=session)
+
+
+@app.command()
+def rotate() -> None:
+    """Rotate and clean up old logs based on retention policy."""
+    rotate_logs()
+
+
+@app.command()
+def summary() -> None:
+    """Show high-level log summary."""
+    log_summary()
+
 
 def check() -> None:
     """Run compliance checks."""
@@ -149,7 +174,6 @@ def _view_session(log_dir: Path, session_id: str) -> None:
     typer.echo(typer.style(f"Session: {session_id}", bold=True))
     typer.echo("")
 
-    # Find session metadata
     meta_files = _collect_files(log_dir / "sessions", "*.meta.json")
     meta_file = next((f for f in meta_files if session_id in f.name), None)
 
@@ -168,7 +192,6 @@ def _view_session(log_dir: Path, session_id: str) -> None:
     else:
         typer.echo("  Session metadata not found.")
 
-    # Find command log
     typer.echo("")
     typer.echo(typer.style("Commands:", bold=True))
     cmd_files = _collect_files(log_dir / "commands", "*")
@@ -205,7 +228,7 @@ def _parse_meta_file(path: Path) -> list[dict]:
     return entries
 
 
-def summary() -> None:
+def log_summary() -> None:
     """Show high-level log summary."""
     log_dir = get_log_dir()
     if not log_dir.exists():
@@ -216,7 +239,6 @@ def summary() -> None:
     command_files = _collect_files(log_dir / "commands", "*")
     command_files = [f for f in command_files if f.suffix in (".history", ".jsonl")]
 
-    # Count date directories
     session_dates = set()
     if (log_dir / "sessions").exists():
         for d in (log_dir / "sessions").iterdir():
@@ -262,7 +284,6 @@ def rotate_logs() -> None:
             log_file.unlink()
             removed += 1
 
-    # Clean up empty date directories
     for type_dir in log_dir.iterdir():
         if not type_dir.is_dir():
             continue

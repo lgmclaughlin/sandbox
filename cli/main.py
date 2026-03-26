@@ -3,23 +3,36 @@
 import os
 from typing import Optional
 
+import click
 import typer
+from typer.core import TyperGroup
 
 from cli import __version__
 from cli.commands import config_cmd, firewall, lifecycle, logs, mcp, secrets, tools
+
+COMMAND_ORDER = [
+    "start", "stop", "restart", "rebuild", "status", "attach",
+    "init", "projects",
+    "tool", "mcp", "secrets", "fw", "config", "logs",
+    "check", "info", "version",
+]
+
+
+class OrderedGroup(TyperGroup):
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        commands = super().list_commands(ctx)
+        ordered = [c for c in COMMAND_ORDER if c in commands]
+        remaining = [c for c in commands if c not in ordered]
+        return ordered + remaining
+
 
 app = typer.Typer(
     name="sandbox",
     help="Secure AI development environment",
     no_args_is_help=True,
     add_completion=False,
+    cls=OrderedGroup,
 )
-
-app.add_typer(firewall.app, name="fw", help="Firewall management")
-app.add_typer(tools.app, name="tool", help="Tool management")
-app.add_typer(mcp.app, name="mcp", help="MCP server management")
-app.add_typer(secrets.app, name="secrets", help="Secrets management")
-app.add_typer(config_cmd.app, name="config", help="Configuration management")
 
 
 @app.callback()
@@ -28,8 +41,13 @@ def main_callback(
         None, "--project", "-p", help="Project name to operate on",
         envvar="SANDBOX_PROJECT",
     ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress non-essential output"),
 ) -> None:
-    """Resolve active project before any command runs."""
+    """Resolve active project and output settings before any command runs."""
+    os.environ["SANDBOX_VERBOSE"] = "1" if verbose else ""
+    os.environ["SANDBOX_QUIET"] = "1" if quiet else ""
+
     if project:
         from cli.lib.config import set_active_project
         from cli.lib.project import get_project_dir
@@ -47,7 +65,13 @@ def main_callback(
             set_active_project(auto)
 
 
-@app.command()
+# --- Lifecycle ---
+
+LIFECYCLE = "Lifecycle"
+PROJECTS = "Projects"
+OBSERVE = "Observability"
+
+@app.command(rich_help_panel=LIFECYCLE)
 def start(
     workspace: Optional[str] = typer.Argument(None, help="Workspace directory to mount (default: current directory)"),
     attach: bool = typer.Option(True, "--attach/--no-attach", help="Attach to shell after start"),
@@ -57,66 +81,37 @@ def start(
     lifecycle.start(attach=attach, env_profile=env, workspace=workspace)
 
 
-@app.command()
+@app.command(rich_help_panel=LIFECYCLE)
 def stop() -> None:
     """Stop all sandbox containers."""
     lifecycle.stop()
 
 
-@app.command()
+@app.command(rich_help_panel=LIFECYCLE)
 def restart() -> None:
     """Restart the sandbox environment."""
     lifecycle.restart()
 
 
-@app.command()
+@app.command(rich_help_panel=LIFECYCLE)
 def rebuild() -> None:
     """Rebuild images and restart."""
     lifecycle.rebuild()
 
 
-@app.command()
+@app.command(rich_help_panel=LIFECYCLE)
 def status() -> None:
     """Show container status."""
     lifecycle.status()
 
 
-@app.command()
+@app.command(rich_help_panel=LIFECYCLE)
 def attach() -> None:
     """Attach to the sandbox shell."""
     lifecycle.attach()
 
 
-@app.command()
-def check() -> None:
-    """Run compliance checks."""
-    logs.check()
-
-
-@app.command(name="logs")
-def logs_cmd(
-    log_type: str = typer.Argument("all", help="Log type: sessions, commands, or all"),
-    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
-    lines: int = typer.Option(50, "--lines", "-n", help="Number of lines to show"),
-    session: str = typer.Option("", "--session", "-s", help="View all events for a session ID"),
-) -> None:
-    """View audit logs."""
-    logs.view(log_type=log_type, follow=follow, lines=lines, session_id=session)
-
-
-@app.command()
-def rotate() -> None:
-    """Rotate and clean up old logs based on retention policy."""
-    logs.rotate_logs()
-
-
-@app.command(name="summary")
-def logs_summary() -> None:
-    """Show high-level log summary."""
-    logs.summary()
-
-
-@app.command()
+@app.command(rich_help_panel=PROJECTS)
 def init(
     name: str = typer.Argument(..., help="Project name to initialize"),
     workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Workspace directory to use"),
@@ -132,7 +127,7 @@ def init(
         raise typer.Exit(1)
 
 
-@app.command(name="projects")
+@app.command(name="projects", rich_help_panel=PROJECTS)
 def list_projects() -> None:
     """List all initialized projects."""
     from cli.lib.project import list_projects as _list_projects
@@ -149,7 +144,33 @@ def list_projects() -> None:
         typer.echo(f"  {p['name']}{marker}")
 
 
-@app.command()
+MANAGE = "Management"
+
+app.add_typer(tools.app, name="tool", help="Tool management", rich_help_panel=MANAGE)
+app.add_typer(mcp.app, name="mcp", help="MCP server management", rich_help_panel=MANAGE)
+app.add_typer(secrets.app, name="secrets", help="Secrets management", rich_help_panel=MANAGE)
+app.add_typer(firewall.app, name="fw", help="Firewall management", rich_help_panel=MANAGE)
+app.add_typer(config_cmd.app, name="config", help="Configuration management", rich_help_panel=MANAGE)
+app.add_typer(logs.app, name="logs", help="Audit log management", rich_help_panel=MANAGE)
+
+
+@app.command(rich_help_panel=OBSERVE)
+def check() -> None:
+    """Run compliance checks."""
+    logs.check()
+
+
+@app.command(rich_help_panel=OBSERVE)
+def info() -> None:
+    """Show combined status, config, and environment overview."""
+    typer.echo(f"sandbox version {__version__}")
+    typer.echo("")
+    lifecycle.status()
+    typer.echo("")
+    config_cmd.show()
+
+
+@app.command(rich_help_panel=OBSERVE)
 def version() -> None:
     """Show version information."""
     typer.echo(f"sandbox version {__version__}")

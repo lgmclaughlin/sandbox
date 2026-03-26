@@ -26,7 +26,7 @@ from cli.lib.docker import (
 from cli.lib.firewall import merge_tool_domains
 from cli.lib.mcp import get_enabled_servers, get_mcp_domains, write_mcp_config
 from cli.lib.mounts import setup_mounts, unmount_all
-from cli.lib.platform import check_docker
+from cli.lib.platform import check_docker, is_quiet
 from cli.lib.secrets import get_secrets_for_container
 
 
@@ -47,9 +47,11 @@ def start(attach: bool = True, env_profile: str = "", workspace: str | None = No
         raise typer.Exit(1)
 
     os.environ["SANDBOX_WORKSPACE_DIR"] = str(workspace_path)
-    typer.echo(f"Workspace: {workspace_path}")
+    if not is_quiet():
+        typer.echo(f"Workspace: {workspace_path}")
 
-    typer.echo("Initializing configuration...")
+    if not is_quiet():
+        typer.echo("Initializing configuration...")
     env = ensure_env()
     ensure_config_dirs()
     ensure_mounts_config()
