@@ -42,6 +42,16 @@ test/                 # pytest
 logs/                 # Audit trail (gitignored)
 ```
 
+## Testing
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest              # Run all tests
+pytest test/unit    # Unit tests only
+pytest -v           # Verbose output
+```
+
 ## License
 
 MIT
