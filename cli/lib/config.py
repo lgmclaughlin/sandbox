@@ -122,6 +122,13 @@ def load_env() -> dict[str, str]:
     return {k: v for k, v in values.items() if v is not None}
 
 
+def ensure_mounts_config() -> None:
+    """Create empty mounts.yaml if it doesn't exist."""
+    if not MOUNTS_FILE.exists():
+        MOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        MOUNTS_FILE.write_text("mounts: []\n")
+
+
 def load_mounts() -> list[dict]:
     """Load mount definitions from mounts.yaml. Returns empty list if missing."""
     if not MOUNTS_FILE.exists():

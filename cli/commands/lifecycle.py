@@ -2,7 +2,14 @@
 
 import typer
 
-from cli.lib.config import ensure_config_dirs, ensure_env, list_available_tools, get_default_tool
+from cli.lib.config import (
+    ensure_config_dirs,
+    ensure_env,
+    ensure_mounts_config,
+    get_default_tool,
+    list_available_tools,
+    load_mounts,
+)
 from cli.lib.docker import (
     attach_to_sandbox,
     get_status,
@@ -12,6 +19,7 @@ from cli.lib.docker import (
     stop_containers,
 )
 from cli.lib.firewall import merge_tool_domains
+from cli.lib.mounts import setup_mounts, unmount_all
 from cli.lib.platform import check_docker
 
 
@@ -25,6 +33,7 @@ def start(attach: bool = True) -> None:
     typer.echo("Initializing configuration...")
     env = ensure_env()
     ensure_config_dirs()
+    ensure_mounts_config()
 
     default_tool = get_default_tool()
     if default_tool:
@@ -32,6 +41,17 @@ def start(attach: bool = True) -> None:
         if domains:
             typer.echo(f"Merging firewall domains for {default_tool['name']}...")
             merge_tool_domains(domains)
+
+    mounts = load_mounts()
+    if mounts:
+        typer.echo("Setting up mounts...")
+        results = setup_mounts()
+        for r in results:
+            if r["ok"]:
+                typer.echo(f"  {r['name']}: mounted")
+            else:
+                typer.echo(typer.style(f"  {r['name']}: {r['error']}",
+                                       fg=typer.colors.YELLOW), err=True)
 
     typer.echo("Starting containers...")
     start_containers(build=not is_running("firewall"))
@@ -47,6 +67,12 @@ def stop() -> None:
     """Stop all sandbox containers."""
     typer.echo("Stopping sandbox containers...")
     stop_containers()
+
+    mounts = load_mounts()
+    if mounts:
+        typer.echo("Unmounting remote filesystems...")
+        unmount_all()
+
     typer.echo(typer.style("Sandbox stopped.", fg=typer.colors.GREEN))
 
 
@@ -77,6 +103,7 @@ def status() -> None:
 
     statuses = get_status()
     tools = list_available_tools()
+    mounts = load_mounts()
 
     typer.echo(typer.style("Containers:", bold=True))
     for service, info in statuses.items():
@@ -92,6 +119,12 @@ def status() -> None:
             typer.echo(f"  {tool['name']}{default}")
     else:
         typer.echo("  No tools configured")
+
+    if mounts:
+        typer.echo("")
+        typer.echo(typer.style("Mounts:", bold=True))
+        for mount in mounts:
+            typer.echo(f"  {mount.get('name', 'unnamed')}: {mount.get('remote', '?')} -> {mount.get('local', '?')} ({mount.get('type', 'rclone')})")
 
 
 def attach() -> None:
