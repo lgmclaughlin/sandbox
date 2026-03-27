@@ -1,14 +1,20 @@
 """MCP server management commands."""
 
 import json
+import os
+import subprocess
 from pathlib import Path
+from typing import Optional
 
 import typer
+import yaml
 
 from cli.lib.config import get_log_dir
 from cli.lib.mcp import (
+    _mcp_dir,
     get_enabled_servers,
     list_mcp_servers,
+    load_mcp_server,
     set_server_enabled,
     write_mcp_config,
 )
@@ -111,6 +117,77 @@ def mcp_logs(
             dir_styled = typer.style(direction, fg=color)
             detail = method or tool or f"{entry.get('size_bytes', 0)}b"
             typer.echo(f"  [{ts}] {srv} {dir_styled} {detail}")
+
+
+@app.command()
+def add(
+    name: str = typer.Argument(..., help="MCP server name"),
+    command: str = typer.Option(..., help="Command to run the server"),
+    args: Optional[str] = typer.Option(None, help="Comma-separated args"),
+    permissions: Optional[str] = typer.Option(None, help="Permissions (e.g., filesystem:read,network:none)"),
+    allowed_paths: Optional[str] = typer.Option(None, "--allowed-paths", help="Comma-separated allowed paths"),
+    domains: Optional[str] = typer.Option(None, help="Comma-separated firewall domains"),
+) -> None:
+    """Create a new MCP server definition."""
+    mcp_dir = _mcp_dir()
+    server_file = mcp_dir / f"{name}.yaml"
+    if server_file.exists():
+        typer.echo(typer.style(f"error: MCP server '{name}' already exists.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    definition: dict = {
+        "name": name,
+        "description": "",
+        "enabled": False,
+        "command": command,
+        "args": args.split(",") if args else [],
+        "permissions": [],
+        "allowed_paths": allowed_paths.split(",") if allowed_paths else [],
+        "validation": {"blocked_patterns": []},
+        "firewall": {"domains": domains.split(",") if domains else []},
+        "env": {},
+    }
+
+    if permissions:
+        for perm in permissions.split(","):
+            if ":" in perm:
+                k, v = perm.split(":", 1)
+                definition["permissions"].append({k.strip(): v.strip()})
+
+    mcp_dir.mkdir(parents=True, exist_ok=True)
+    server_file.write_text(yaml.dump(definition, default_flow_style=False))
+    typer.echo(f"Created MCP server definition: {server_file}")
+    typer.echo(f"  Enable with: sandbox mcp enable {name}")
+
+
+@app.command()
+def edit(
+    name: str = typer.Argument(..., help="MCP server name to edit"),
+) -> None:
+    """Open an MCP server definition in editor."""
+    server_file = _mcp_dir() / f"{name}.yaml"
+    if not server_file.exists():
+        typer.echo(typer.style(f"error: MCP server '{name}' not found.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    editor = os.environ.get("EDITOR", "vim")
+    subprocess.run([editor, str(server_file)])
+
+
+@app.command()
+def show(
+    name: str = typer.Argument(..., help="MCP server name to display"),
+) -> None:
+    """Display full MCP server definition."""
+    definition = load_mcp_server(name)
+    if not definition:
+        typer.echo(typer.style(f"error: MCP server '{name}' not found.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    typer.echo(yaml.dump(definition, default_flow_style=False).rstrip())
 
 
 def _regenerate_config() -> None:

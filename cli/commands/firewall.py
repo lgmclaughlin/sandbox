@@ -1,9 +1,15 @@
 """Firewall management commands."""
 
+import os
+import subprocess
+from typing import Optional
+
 import typer
+import yaml
 
 from cli.lib.config import get_log_dir
 from cli.lib.firewall import (
+    _profiles_dir,
     add_domain,
     apply_profile,
     apply_rules,
@@ -118,6 +124,47 @@ def fw_logs(
         color = typer.colors.GREEN if act == "allow" else typer.colors.RED
         act_styled = typer.style(act.upper(), fg=color)
         typer.echo(f"  [{ts}] {act_styled} {dst}:{port} ({proto})")
+
+
+@app.command(name="create-profile")
+def create_fw_profile(
+    name: str = typer.Argument(..., help="Profile name"),
+    domains: Optional[str] = typer.Option(None, help="Comma-separated domains"),
+) -> None:
+    """Create a new firewall profile."""
+    profiles_dir = _profiles_dir()
+    profile_file = profiles_dir / f"{name}.yaml"
+
+    if profile_file.exists():
+        typer.echo(typer.style(f"error: Profile '{name}' already exists.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    definition = {
+        "name": name,
+        "description": "",
+        "domains": domains.split(",") if domains else [],
+    }
+
+    profiles_dir.mkdir(parents=True, exist_ok=True)
+    profile_file.write_text(yaml.dump(definition, default_flow_style=False))
+    typer.echo(f"Created firewall profile: {profile_file}")
+    typer.echo(f"  Apply with: sandbox fw profile {name}")
+
+
+@app.command(name="edit-profile")
+def edit_fw_profile(
+    name: str = typer.Argument(..., help="Profile name to edit"),
+) -> None:
+    """Open a firewall profile in editor."""
+    profile_file = _profiles_dir() / f"{name}.yaml"
+    if not profile_file.exists():
+        typer.echo(typer.style(f"error: Profile '{name}' not found.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    editor = os.environ.get("EDITOR", "vim")
+    subprocess.run([editor, str(profile_file)])
 
 
 def _apply_and_report() -> None:

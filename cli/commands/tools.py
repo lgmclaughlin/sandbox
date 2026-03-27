@@ -1,8 +1,13 @@
 """Tool management commands."""
 
-import typer
+import os
+import subprocess
+from typing import Optional
 
-from cli.lib.config import list_available_tools, load_tool_definition
+import typer
+import yaml
+
+from cli.lib.config import list_available_tools, load_tool_definition, TOOLS_DIR
 from cli.lib.docker import exec_in_sandbox, is_running
 from cli.lib.firewall import merge_tool_domains, read_whitelist, remove_domain, apply_rules
 
@@ -134,6 +139,73 @@ def remove(
             apply_rules()
 
     typer.echo(typer.style(f"{name} removed.", fg=typer.colors.GREEN))
+
+
+@app.command()
+def add(
+    name: str = typer.Argument(..., help="Tool name"),
+    method: str = typer.Option("npm", help="Install method: npm or pip"),
+    package: str = typer.Option(..., help="Package name"),
+    domains: Optional[str] = typer.Option(None, help="Comma-separated firewall domains"),
+    env: Optional[str] = typer.Option(None, help="Comma-separated env vars (KEY=val,KEY2=val2)"),
+    default: bool = typer.Option(False, "--default", help="Set as default tool"),
+) -> None:
+    """Create a new tool definition."""
+    tool_file = TOOLS_DIR / f"{name}.yaml"
+    if tool_file.exists():
+        typer.echo(typer.style(f"error: Tool '{name}' already exists.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    definition = {
+        "name": name,
+        "description": "",
+        "default": default,
+        "install": {"method": method, "package": package, "global": method == "npm"},
+        "firewall": {"domains": domains.split(",") if domains else []},
+        "env": {},
+        "mcp": {"config_path": ""},
+        "volumes": [],
+    }
+
+    if env:
+        for pair in env.split(","):
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                definition["env"][k.strip()] = v.strip()
+
+    TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+    tool_file.write_text(yaml.dump(definition, default_flow_style=False))
+    typer.echo(f"Created tool definition: {tool_file}")
+
+
+@app.command()
+def edit(
+    name: str = typer.Argument(..., help="Tool name to edit"),
+) -> None:
+    """Open a tool definition in editor."""
+    tool_file = TOOLS_DIR / f"{name}.yaml"
+    if not tool_file.exists():
+        typer.echo(typer.style(f"error: Tool '{name}' not found.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    editor = os.environ.get("EDITOR", "vim")
+    subprocess.run([editor, str(tool_file)])
+
+
+@app.command()
+def show(
+    name: str = typer.Argument(..., help="Tool name to display"),
+) -> None:
+    """Display full tool definition."""
+    definition = load_tool_definition(name)
+    if not definition:
+        typer.echo(typer.style(f"error: Tool '{name}' not found.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    typer.echo(yaml.dump(definition, default_flow_style=False).rstrip())
 
 
 def _get_all_tool_domains_except(exclude_name: str) -> set[str]:
