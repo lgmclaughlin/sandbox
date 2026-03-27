@@ -1,0 +1,23 @@
+# Content inspection rules for the TLS proxy
+#
+# Each rule checks request/response bodies against a regex pattern.
+# Actions: alert (log only), block (reject request)
+#
+# These rules run inside the proxy container when SANDBOX_PROXY_MODE=proxy.
+
+rules: []
+
+# Example rules:
+#
+# rules:
+#   - name: ssn-pattern
+#     pattern: '\b\d{3}-\d{2}-\d{4}\b'
+#     action: block
+#
+#   - name: api-key-leak
+#     pattern: 'sk-[a-zA-Z0-9]{20,}'
+#     action: alert
+#
+#   - name: credit-card
+#     pattern: '\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'
+#     action: block

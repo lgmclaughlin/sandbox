@@ -1,0 +1,22 @@
+# DLP (Data Loss Prevention) provider configuration
+#
+# The DLP provider is called by the TLS proxy before forwarding
+# requests to their destination. It can log, block, or redact
+# sensitive content.
+#
+# Providers:
+#   none    - No DLP (default)
+#   webhook - Call an external HTTP endpoint for each request
+
+provider: none
+
+# Webhook configuration (when provider=webhook)
+# webhook:
+#   url: https://dlp-api.internal.company.com/scan
+#   timeout_seconds: 5
+#   on_error: allow   # allow or block when webhook fails
+#
+# Expected webhook response:
+#   {"action": "allow"}   - Let request through
+#   {"action": "block"}   - Reject request
+#   {"action": "redact", "redacted_content": "..."}  - Replace content

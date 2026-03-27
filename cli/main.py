@@ -8,12 +8,12 @@ import typer
 from typer.core import TyperGroup
 
 from cli import __version__
-from cli.commands import config_cmd, firewall, lifecycle, logs, mcp, secrets, tools
+from cli.commands import config_cmd, firewall, lifecycle, logs, mcp, proxy, secrets, tools
 
 COMMAND_ORDER = [
     "start", "stop", "restart", "rebuild", "status", "attach",
     "init", "projects",
-    "tool", "mcp", "secrets", "fw", "config", "logs",
+    "tool", "mcp", "secrets", "fw", "proxy", "config", "logs",
     "check", "info", "version",
 ]
 
@@ -151,6 +151,7 @@ app.add_typer(tools.app, name="tool", help="Tool management", rich_help_panel=MA
 app.add_typer(mcp.app, name="mcp", help="MCP server management", rich_help_panel=MANAGE)
 app.add_typer(secrets.app, name="secrets", help="Secrets management", rich_help_panel=MANAGE)
 app.add_typer(firewall.app, name="fw", help="Firewall management", rich_help_panel=MANAGE)
+app.add_typer(proxy.app, name="proxy", help="TLS proxy management", rich_help_panel=MANAGE)
 app.add_typer(config_cmd.app, name="config", help="Configuration management", rich_help_panel=MANAGE)
 app.add_typer(logs.app, name="logs", help="Audit log management", rich_help_panel=MANAGE)
 

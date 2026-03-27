@@ -20,6 +20,24 @@ services:
     tty: true
     restart: unless-stopped
 
+  proxy:
+    image: mitmproxy/mitmproxy:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-project}_proxy
+    network_mode: "service:firewall"
+    entrypoint: ["mitmdump", "--set", "block_global=false", "-s", "/opt/proxy/addon.py"]
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-project}
+      - SANDBOX_LOG_SINKS=${SANDBOX_LOG_SINKS:-file}
+      - SANDBOX_DLP_PROVIDER=${SANDBOX_DLP_PROVIDER:-none}
+      - SANDBOX_DLP_WEBHOOK_URL=${SANDBOX_DLP_WEBHOOK_URL:-}
+    volumes:
+      - ../docker/proxy/addon.py:/opt/proxy/addon.py:ro
+      - ${SANDBOX_LOG_DIR:-../logs}:/var/log/sandbox:rw
+      - proxy_certs:/home/mitmproxy/.mitmproxy
+    profiles:
+      - proxy
+    restart: unless-stopped
+
   sandbox:
     build:
       context: ..
@@ -54,3 +72,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  proxy_certs:

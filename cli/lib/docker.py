@@ -15,6 +15,7 @@ import yaml
 COMPOSE_FILE = PROJECT_ROOT / "docker" / "docker-compose.yml"
 COMPOSE_OVERRIDE_FILE = PROJECT_ROOT / "docker" / "docker-compose.override.yml"
 FIREWALL_SERVICE = "firewall"
+PROXY_SERVICE = "proxy"
 SANDBOX_SERVICE = "sandbox"
 
 
@@ -41,6 +42,11 @@ def _get_container(client: docker.DockerClient, service: str):
         return None
 
 
+def _is_proxy_mode() -> bool:
+    env = load_env()
+    return env.get("SANDBOX_PROXY_MODE", "firewall-only") == "proxy"
+
+
 def _compose_cmd() -> list[str]:
     env = load_env()
     project = env.get("COMPOSE_PROJECT_NAME", "project")
@@ -51,6 +57,8 @@ def _compose_cmd() -> list[str]:
     ]
     if COMPOSE_OVERRIDE_FILE.exists():
         cmd.extend(["-f", str(COMPOSE_OVERRIDE_FILE)])
+    if _is_proxy_mode():
+        cmd.extend(["--profile", "proxy"])
     return cmd
 
 
@@ -84,6 +92,26 @@ def _generate_override() -> None:
         ])
         sandbox["cap_drop"] = ["ALL"]
         has_overrides = True
+
+    proxy_mode = env.get("SANDBOX_PROXY_MODE", "firewall-only") == "proxy"
+    if proxy_mode:
+        sandbox = override["services"].setdefault("sandbox", {})
+        sandbox_env = sandbox.setdefault("environment", [])
+        sandbox_env.extend([
+            "HTTP_PROXY=http://localhost:8080",
+            "HTTPS_PROXY=http://localhost:8080",
+        ])
+        sandbox.setdefault("volumes", []).append(
+            "proxy_certs:/usr/local/share/ca-certificates/proxy:ro"
+        )
+        has_overrides = True
+
+        inspection_file = PROJECT_ROOT / "config" / "network" / "inspection.yaml"
+        if inspection_file.exists():
+            proxy = override["services"].setdefault("proxy", {})
+            proxy.setdefault("volumes", []).append(
+                f"{inspection_file}:/etc/proxy/inspection.yaml:ro"
+            )
 
     if has_overrides:
         COMPOSE_OVERRIDE_FILE.write_text(yaml.dump(override, default_flow_style=False))
@@ -147,16 +175,25 @@ def start_containers(build: bool = False, secrets: dict[str, str] | None = None,
 
     base = _compose_cmd()
 
+    proxy_mode = _is_proxy_mode()
+
     if not is_running(FIREWALL_SERVICE):
         subprocess.run([*base, "up", "-d", FIREWALL_SERVICE], env=env, check=True)
 
     if build or not is_running(FIREWALL_SERVICE):
         _init_firewall(offline=offline)
 
+    if proxy_mode and not is_running(PROXY_SERVICE):
+        subprocess.run([*base, "up", "-d", PROXY_SERVICE], env=env, check=True)
+        _inject_proxy_ca()
+
     if build:
         subprocess.run([*base, "build", SANDBOX_SERVICE], env=env, check=True)
 
     subprocess.run([*base, "up", "-d", SANDBOX_SERVICE], env=env, check=True)
+
+    if proxy_mode and is_running(SANDBOX_SERVICE):
+        _update_sandbox_ca()
 
 
 def _init_firewall(offline: bool = False) -> None:
@@ -196,11 +233,49 @@ def _tar_single_file(name: str, data: bytes) -> bytes:
     return buf.read()
 
 
+def _inject_proxy_ca() -> None:
+    """Copy custom CA cert into the proxy if configured."""
+    env = load_env()
+    custom_ca = env.get("SANDBOX_PROXY_CA_CERT", "")
+    if not custom_ca:
+        return
+
+    ca_path = Path(custom_ca)
+    if not ca_path.exists():
+        return
+
+    client = _get_client()
+    container = _get_container(client, PROXY_SERVICE)
+    if not container:
+        return
+
+    data = ca_path.read_bytes()
+    container.put_archive(
+        "/home/mitmproxy/.mitmproxy",
+        _tar_single_file("mitmproxy-ca-cert.pem", data),
+    )
+
+
+def _update_sandbox_ca() -> None:
+    """Update CA certificates in the sandbox container for proxy trust."""
+    client = _get_client()
+    container = _get_container(client, SANDBOX_SERVICE)
+    if not container:
+        return
+
+    container.exec_run(
+        ["bash", "-c", "update-ca-certificates 2>/dev/null || true"],
+        user="root",
+    )
+
+
 def stop_containers() -> None:
-    """Stop sandbox then firewall."""
+    """Stop sandbox, proxy (if running), then firewall."""
     env = _compose_env()
     base = _compose_cmd()
     subprocess.run([*base, "stop", SANDBOX_SERVICE], env=env, check=False)
+    if is_running(PROXY_SERVICE):
+        subprocess.run([*base, "stop", PROXY_SERVICE], env=env, check=False)
     subprocess.run([*base, "stop", FIREWALL_SERVICE], env=env, check=False)
 
 
@@ -229,7 +304,11 @@ def get_status() -> dict[str, dict[str, str]]:
     client = _get_client()
     result = {}
 
-    for service in [FIREWALL_SERVICE, SANDBOX_SERVICE]:
+    services = [FIREWALL_SERVICE, SANDBOX_SERVICE]
+    if _is_proxy_mode():
+        services.insert(1, PROXY_SERVICE)
+
+    for service in services:
         container = _get_container(client, service)
         if container:
             result[service] = {
