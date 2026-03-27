@@ -67,6 +67,8 @@ def check() -> None:
                 msg += f" ({detail})"
             typer.echo(msg)
 
+    env = load_env()
+
     _check("Firewall container running", is_running("firewall"))
     _check("Sandbox container running", is_running("sandbox"))
 
@@ -82,8 +84,27 @@ def check() -> None:
         _check("Sandbox running as non-root", username != "root",
                f"running as '{username}'" if username == "root" else "")
 
-    env = load_env()
     _check("Environment configured", bool(env))
+
+    proxy_mode = env.get("SANDBOX_PROXY_MODE", "firewall-only") == "proxy"
+    if proxy_mode:
+        _check("Proxy container running", is_running("proxy"))
+        dlp = env.get("SANDBOX_DLP_PROVIDER", "none")
+        _check("DLP provider configured", dlp != "none",
+               "set SANDBOX_DLP_PROVIDER for content scanning")
+
+    hardened = env.get("SANDBOX_HARDENED_MODE", "").lower() == "true"
+    if hardened:
+        cpu = env.get("SANDBOX_CPU_LIMIT", "")
+        mem = env.get("SANDBOX_MEM_LIMIT", "")
+        _check("CPU limit set (hardened mode)", bool(cpu),
+               "set SANDBOX_CPU_LIMIT to restrict resources")
+        _check("Memory limit set (hardened mode)", bool(mem),
+               "set SANDBOX_MEM_LIMIT to restrict resources")
+
+    enforce_mcp = env.get("SANDBOX_ENFORCE_MCP_PERMISSIONS", "").lower() == "true"
+    _check("MCP permissions enforced", enforce_mcp,
+           "set SANDBOX_ENFORCE_MCP_PERMISSIONS=true for enforcement")
 
     typer.echo("")
     total = passed + failed

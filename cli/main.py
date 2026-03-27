@@ -14,7 +14,7 @@ COMMAND_ORDER = [
     "start", "stop", "restart", "rebuild", "status", "attach",
     "init", "projects",
     "tool", "mcp", "secrets", "fw", "proxy", "config", "logs",
-    "check", "info", "version",
+    "check", "info", "update", "version",
 ]
 
 
@@ -170,6 +170,51 @@ def info() -> None:
     lifecycle.status()
     typer.echo("")
     config_cmd.show()
+
+
+@app.command(rich_help_panel=OBSERVE)
+def update(
+    check_only: bool = typer.Option(False, "--check", help="Check for updates without applying"),
+    apply: bool = typer.Option(False, "--apply", help="Pull latest and rebuild"),
+) -> None:
+    """Check for updates or update the sandbox."""
+    import subprocess
+
+    typer.echo(f"Current version: {__version__}")
+
+    if check_only or not apply:
+        typer.echo("")
+        typer.echo("To update:")
+        typer.echo("  1. git pull")
+        typer.echo("  2. pip install -e '.[dev]'")
+        typer.echo("  3. sandbox rebuild")
+        typer.echo("")
+        typer.echo("Or run: sandbox update --apply")
+        return
+
+    if apply:
+        typer.echo("Pulling latest changes...")
+        result = subprocess.run(["git", "pull"], capture_output=True, text=True)
+        if result.returncode != 0:
+            typer.echo(typer.style(f"error: git pull failed: {result.stderr.strip()}",
+                                   fg=typer.colors.RED), err=True)
+            raise typer.Exit(1)
+        typer.echo(result.stdout.strip())
+
+        typer.echo("Updating dependencies...")
+        result = subprocess.run(
+            ["pip", "install", "-e", ".[dev]"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            typer.echo(typer.style(f"error: pip install failed",
+                                   fg=typer.colors.RED), err=True)
+            raise typer.Exit(1)
+
+        typer.echo("Rebuilding containers...")
+        lifecycle.rebuild()
+
+        typer.echo(typer.style("Update complete.", fg=typer.colors.GREEN))
 
 
 @app.command(rich_help_panel=OBSERVE)
