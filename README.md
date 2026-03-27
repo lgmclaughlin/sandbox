@@ -22,9 +22,14 @@ Run AI coding assistants (Claude Code, Aider, etc.) inside a locked-down contain
 ```bash
 git clone <repo>
 cd sandbox
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install .
 sandbox start
+```
+
+For development (editable install with test dependencies):
+```bash
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
 ```
 
 ## CLI
@@ -46,7 +51,7 @@ Observability   sandbox check|info|version
 ```bash
 sandbox start                           # Start with current directory as workspace
 sandbox start ~/projects/my-app         # Start with specific workspace
-sandbox start --env=corp                # Start with corporate profile
+sandbox start --env=corp                # Start with a specific profile
 sandbox --project billing start         # Start a named project
 sandbox init my-project -w ~/code/repo  # Initialize project with external workspace
 sandbox fw add api.example.com          # Whitelist a domain
@@ -80,7 +85,7 @@ cli/                  # Python CLI (typer)
   lib/                # Core libraries (config, docker, firewall, secrets, mcp, mounts)
 config/               # Tool definitions, MCP servers, mount config, firewall profiles
 docker/               # Dockerfiles, compose, firewall scripts, MCP log wrapper
-test/                 # pytest (unit + integration, 116 tests)
+test/                 # pytest (unit + integration, 163 tests)
 projects/             # Multi-project instances (gitignored)
 logs/                 # Audit trail (gitignored)
 ```
@@ -88,7 +93,7 @@ logs/                 # Audit trail (gitignored)
 ## Development
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 

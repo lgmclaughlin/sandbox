@@ -74,7 +74,10 @@ class LocalProvider(SecretsProvider):
 
     def _save(self) -> None:
         self.path.write_text(json.dumps(self._data, indent=2) + "\n")
-        self.path.chmod(0o600)
+        try:
+            self.path.chmod(0o600)
+        except OSError:
+            pass  # Windows: NTFS permissions handled differently
 
     def get(self, key: str) -> str | None:
         encoded = self._data.get(key)

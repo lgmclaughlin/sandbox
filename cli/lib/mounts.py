@@ -139,7 +139,11 @@ def unmount_all() -> None:
 
 def _unmount(path: Path) -> None:
     """Unmount a path."""
+    from cli.lib.platform import IS_MACOS
+
     if IS_WINDOWS:
         subprocess.run(["taskkill", "/F", "/IM", "rclone.exe"], capture_output=True)
+    elif IS_MACOS:
+        subprocess.run(["umount", str(path)], capture_output=True)
     else:
         subprocess.run(["fusermount", "-u", "-z", str(path)], capture_output=True)

@@ -292,11 +292,14 @@ def attach_to_sandbox() -> None:
     """Attach to sandbox container with an interactive shell."""
     env = _compose_env()
     base = _compose_cmd()
-    os.execvpe(
-        base[0],
-        [*base, "exec", SANDBOX_SERVICE, "bash", "-l"],
-        env,
-    )
+    cmd = [*base, "exec", SANDBOX_SERVICE, "bash", "-l"]
+
+    if hasattr(os, "execvpe"):
+        os.execvpe(base[0], cmd, env)
+    else:
+        # Windows: no execvpe, use subprocess and forward exit code
+        result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
 
 
 def get_status() -> dict[str, dict[str, str]]:
