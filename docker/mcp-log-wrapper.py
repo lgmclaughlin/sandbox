@@ -16,12 +16,22 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+import re
+
 LOG_DIR = Path("/var/log/sandbox/mcp")
 SESSION_ID = os.environ.get("SANDBOX_SESSION_ID", "unknown")
 PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "default")
 LOG_SINKS = os.environ.get("SANDBOX_LOG_SINKS", "file")
 MAX_PAYLOAD = int(os.environ.get("SANDBOX_LOG_MAX_PAYLOAD_BYTES", "0"))
 OTEL_COMPAT = os.environ.get("SANDBOX_LOG_OTEL_COMPAT", "").lower() == "true"
+MCP_ENFORCE = os.environ.get("MCP_ENFORCE", "").lower() == "true"
+MCP_PERMISSIONS = {}
+
+if os.environ.get("MCP_PERMISSIONS"):
+    try:
+        MCP_PERMISSIONS = json.loads(os.environ["MCP_PERMISSIONS"])
+    except json.JSONDecodeError:
+        pass
 
 _event_counter = 0
 
@@ -78,6 +88,41 @@ def emit_event(event_type: str, server_name: str, payload: dict) -> None:
         pass
 
 
+def validate_request(parsed: dict, server_name: str) -> str | None:
+    """Validate an MCP request against permissions. Returns error message or None."""
+    if not MCP_ENFORCE or not MCP_PERMISSIONS:
+        return None
+
+    method = parsed.get("method", "")
+    if method != "tools/call":
+        return None
+
+    params = parsed.get("params", {})
+    if not isinstance(params, dict):
+        return None
+
+    arguments = params.get("arguments", {})
+    if not isinstance(arguments, dict):
+        return None
+
+    blocked_patterns = MCP_PERMISSIONS.get("blocked_patterns", [])
+    allowed_paths = MCP_PERMISSIONS.get("allowed_paths", [])
+
+    for key, value in arguments.items():
+        if not isinstance(value, str):
+            continue
+
+        for pattern in blocked_patterns:
+            if re.search(pattern, value):
+                return f"Blocked pattern '{pattern}' found in argument '{key}'"
+
+        if allowed_paths and ("path" in key.lower() or "file" in key.lower()):
+            if not any(value.startswith(p) for p in allowed_paths):
+                return f"Path '{value}' not in allowed paths: {allowed_paths}"
+
+    return None
+
+
 def proxy_stream(source, dest, server_name: str, event_type: str) -> None:
     buffer = ""
     for chunk in iter(lambda: source.read(1), ""):
@@ -89,16 +134,40 @@ def proxy_stream(source, dest, server_name: str, event_type: str) -> None:
 
         if chunk == "\n" and buffer.strip():
             payload = {"size_bytes": len(buffer.strip())}
+            request_id = None
 
             try:
                 parsed = json.loads(buffer.strip())
                 if isinstance(parsed, dict):
                     payload["method"] = parsed.get("method", "")
-                    payload["id"] = parsed.get("id")
+                    request_id = parsed.get("id")
+                    payload["id"] = request_id
                     if event_type == "mcp_request":
                         params = parsed.get("params", {})
                         if isinstance(params, dict):
                             payload["tool"] = params.get("name", "")
+
+                        violation = validate_request(parsed, server_name)
+                        if violation:
+                            payload["violation"] = violation
+                            emit_event("mcp_validation_error", server_name, payload)
+
+                            if request_id is not None:
+                                error_response = json.dumps({
+                                    "jsonrpc": "2.0",
+                                    "id": request_id,
+                                    "error": {
+                                        "code": -32600,
+                                        "message": f"Permission denied: {violation}",
+                                    },
+                                }) + "\n"
+                                # Write error back to the AI tool (stdout)
+                                sys.stdout.write(error_response)
+                                sys.stdout.flush()
+
+                            buffer = ""
+                            continue
+
             except (json.JSONDecodeError, TypeError):
                 pass
 

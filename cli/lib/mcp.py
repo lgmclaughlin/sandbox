@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from cli.lib.config import PROJECT_ROOT, get_default_tool, load_tool_definition
+from cli.lib.config import PROJECT_ROOT, get_default_tool, load_env, load_tool_definition
 
 MCP_DIR = PROJECT_ROOT / "config" / "mcp"
 MCP_LOG_WRAPPER = "/usr/local/bin/mcp-log-wrapper"
@@ -59,8 +59,13 @@ def generate_mcp_config(tool_name: str | None = None) -> dict:
     """Generate mcp-config.json content with logging wrapper around each server.
 
     The wrapper intercepts all MCP communication for automatic logging
-    with session correlation.
+    with session correlation. When permission enforcement is enabled,
+    the wrapper validates tool call arguments against the server's
+    permission model.
     """
+    env = load_env()
+    enforce = env.get("SANDBOX_ENFORCE_MCP_PERMISSIONS", "").lower() == "true"
+
     servers = get_enabled_servers()
     config = {"mcpServers": {}}
 
@@ -72,10 +77,21 @@ def generate_mcp_config(tool_name: str | None = None) -> dict:
         if not name or not command:
             continue
 
+        server_env = dict(server.get("env", {}))
+
+        if enforce:
+            permissions = {
+                "allowed_paths": server.get("allowed_paths", []),
+                "blocked_patterns": server.get("validation", {}).get("blocked_patterns", []),
+                "permissions": server.get("permissions", []),
+            }
+            server_env["MCP_PERMISSIONS"] = json.dumps(permissions)
+            server_env["MCP_ENFORCE"] = "true"
+
         config["mcpServers"][name] = {
             "command": MCP_LOG_WRAPPER,
             "args": [name, command] + args,
-            "env": server.get("env", {}),
+            "env": server_env,
         }
 
     return config
