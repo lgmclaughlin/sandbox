@@ -1,115 +1,146 @@
 # Sandbox
 
-Secure, auditable execution environment for LLM-based development tools.
+AI coding tools can execute code, access files, and make network requests, often without clear boundaries or audit trails. Sandbox provides a controlled runtime that enforces these boundaries and produces a complete, traceable record of what happened.
 
-Run AI coding assistants (Claude Code, Aider, etc.) inside a locked-down container with network controls, session logging, and compliance checks.
+## How It Works
 
-## Features
+```
+AI Tool (Claude Code, Aider, etc.)
+        |
+Sandbox Container (untrusted, non-root)
+        |
+Shared Network Namespace
+        |
+Firewall Container (enforces all egress)
+        |
+(Optional) TLS Proxy (inspection, DLP)
+```
 
-- **Isolated runtime**: Non-root container with separate firewall container
-- **Network control**: Domain whitelist firewall with profiles, connection logging, and per-tool domain management
-- **Audit logging**: Terminal session recording, command history, structured JSON logs, daily rotation
-- **Tool management**: Install/switch AI tools via CLI, each with its own dependencies and firewall rules
-- **MCP server support**: Tool-agnostic MCP servers with automatic session-correlated logging via transparent wrapper
-- **Secrets management**: Encrypted local storage or environment variable injection for API keys
-- **Environment profiles**: Switch between dev, corp, and custom configurations
-- **Multi-project**: Run multiple isolated sandbox instances with separate configs and logs
-- **Full CLI coverage**: Every configuration aspect manageable via commands
-- **Cross-platform**: Linux, macOS, and Windows support
+- The sandbox container has no direct network access
+- All tool calls (MCP) are intercepted and logged via a transparent wrapper
+- All activity is recorded as structured events with session correlation
 
-## Quick start
+## Capabilities
+
+### Isolation and Enforcement
+- Non-root container with deny-by-default network policy
+- All traffic forced through a separate firewall container
+- Domain-based egress control with named profiles (dev, restricted, custom)
+- Optional TLS proxy for content inspection and DLP integration
+- Resource limits and hardened mode (read-only filesystem, dropped capabilities)
+
+### Observability and Auditability
+- Unified JSON event logging across commands, MCP calls, firewall, and proxy
+- Session-correlated execution traces
+- OpenTelemetry-compatible field mapping
+- Exportable logs for external systems (Fluent Bit, Filebeat, Vector)
+
+### Tool and Data Control
+- Pluggable AI tool definitions with per-tool firewall domains
+- MCP servers with permission enforcement and path validation
+- Secrets management with encrypted local storage or environment injection
+- Remote mount support (rclone, sshfs) with declarative configuration
+
+### Developer Experience
+- CLI-driven workflow
+- Multi-project isolation with named instances
+- Environment profiles for switching between configurations
+- Centralized config with first-run scaffolding
+- Cross-platform support (Linux, macOS, Windows)
+
+## Quick Start
 
 ```bash
 pip install .
 sandbox start
 ```
 
-On first run, sandbox scaffolds configuration to your OS data directory (`~/.local/share/sandbox/` on Linux). For development:
-```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-```
+On first run, configuration is scaffolded to your OS data directory. Find it with `sandbox config show --path`.
 
-## CLI
-
-```
-Lifecycle       sandbox start [path]|stop|restart|rebuild|status|attach
-Projects        sandbox init <name>|projects
-Tools           sandbox tool list|install|remove|add|edit|show
-MCP             sandbox mcp list|enable|disable|add|edit|show|logs
-Secrets         sandbox secrets set|get|list|delete
-Firewall        sandbox fw ls|add|remove|apply|profiles|profile|create-profile|edit-profile|logs
-Proxy           sandbox proxy status|logs
-Mounts          sandbox mount list|add|remove
-Inspection      sandbox inspect list|add|remove
-Config          sandbox config show|get|set|profiles|create-profile|edit|export|import|reset
-Logs            sandbox logs view|rotate|summary|export
-Observability   sandbox check|info|update|version
-```
-
-### Examples
+## Example: Blocked Network Request
 
 ```bash
-sandbox start                           # Start with current directory as workspace
-sandbox start ~/projects/my-app         # Start with specific workspace
-sandbox start --env=corp                # Start with a specific profile
-sandbox --project billing start         # Start a named project
-sandbox init my-project -w ~/code/repo  # Initialize project with external workspace
-sandbox config set SANDBOX_LOG_FORMAT json  # Set a config value
-sandbox config show --path              # Show config directory location
-sandbox tool add my-tool --method pip --package my-pkg  # Create tool definition
-sandbox mcp add my-server --command node --args server.js  # Create MCP server
-sandbox fw add api.example.com          # Whitelist a domain
-sandbox fw create-profile staging --domains api.staging.com,cdn.staging.com
-sandbox mount add data --type rclone --remote s3:bucket/path --local ./data
-sandbox inspect add ssn --pattern '\b\d{3}-\d{2}-\d{4}\b' --action block
-sandbox secrets set API_KEY sk-...      # Store a secret
-sandbox config export -o backup.json    # Export config for sharing
-sandbox check                           # Run compliance checks
-sandbox logs view --session <id>        # View full session trace
-sandbox info                            # Combined status + config overview
+sandbox start ~/my-project
+# inside the sandbox container:
+curl https://unapproved-domain.com
+# request blocked by firewall
 ```
+
+The event is logged:
+```json
+{
+  "event_type": "firewall_block",
+  "session_id": "lgm_sandbox_20260327_120000",
+  "source": "firewall-log",
+  "payload": {
+    "dst": "203.0.113.50",
+    "port": "443",
+    "proto": "TCP"
+  }
+}
+```
+
+View it with `sandbox fw logs` or `sandbox logs view --session <id>` for the full session trace.
+
+## Core Workflow
+
+```bash
+sandbox start                    # Start with current directory as workspace
+sandbox attach                   # Attach to the sandbox shell
+sandbox stop                     # Stop all containers
+```
+
+## Common Tasks
+
+```bash
+sandbox tool install claude-code           # Install an AI tool
+sandbox fw add api.example.com             # Whitelist a domain
+sandbox mcp enable filesystem              # Enable an MCP server
+sandbox secrets set API_KEY sk-...         # Store a secret
+sandbox config set SANDBOX_LOG_FORMAT json # Change a setting
+sandbox logs view --session <id>           # View session trace
+sandbox check                              # Run compliance checks
+```
+
+See the [full CLI reference](docs/user-guide.md) and [architecture documentation](docs/architecture.md) for details.
+
+## Security Model
+
+- **Host**: trusted
+- **Firewall container**: enforcement boundary, controls all network access
+- **Sandbox container**: untrusted execution environment
+- **Proxy** (optional): inspects encrypted traffic, applies DLP rules
+- All outbound traffic is explicitly allowed or blocked
+- All tool access is mediated and logged via MCP wrappers
+
+## Use Cases
+
+- Run AI coding tools safely on sensitive codebases
+- Enforce network and data access policies for LLM agents
+- Generate audit logs for compliance or incident review
+- Create reproducible, isolated AI development environments
 
 ## Configuration
 
-Configuration lives in the sandbox data directory (find with `sandbox config show --path`):
+Configuration lives in the sandbox data directory. Manage via `sandbox config` commands.
 
-| Directory | Contents |
-|-----------|----------|
-| `.env` / `.env.dist` | Environment variables |
-| `config/tools/` | AI tool definitions (Claude Code, Aider, Open Interpreter) |
-| `config/mcp/` | MCP server definitions (filesystem, fetch) |
-| `config/firewall/profiles/` | Firewall domain profiles (dev, restricted) |
-| `config/network/` | Content inspection and DLP rules |
-| `config/mounts.yaml` | Remote mount definitions (rclone/sshfs) |
-| `docker/` | Dockerfiles, compose, firewall scripts |
-| `logs/` | Audit trail |
-| `projects/` | Named project overrides |
-
-## Project structure
-
+```bash
+sandbox config show --path       # Where config lives
+sandbox config show              # View merged config
+sandbox config set <key> <value> # Set a value
+sandbox config export            # Export for sharing
 ```
-cli/                  # Python CLI (typer)
-  commands/           # CLI command modules
-  lib/                # Core libraries (config, docker, firewall, secrets, mcp, mounts)
-  data/               # Bundled templates (scaffolded to data dir on first run)
-test/                 # pytest (unit + integration, 184 tests)
-docs/                 # User guide, architecture, use cases, MCP guide, deployment guide
-```
+
+See the [user guide](docs/user-guide.md) for the full configuration reference.
+
+> Sandbox produces structured execution logs. It does not replace observability platforms (Datadog, OpenTelemetry, etc.) but integrates with them via JSON log export and OTEL-compatible fields.
 
 ## Development
 
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-```
-
-## Testing
-
-```bash
-pytest              # Run all tests
-pytest test/unit    # Unit tests only
-pytest -v           # Verbose output
+pytest
 ```
 
 ## License
