@@ -134,11 +134,30 @@ When `SANDBOX_LOG_OTEL_COMPAT=true`, events include an `otel` section mapping `s
 
 ## Layer 5: Workflow Engine
 
-### Configuration
-Profile-based config merging: `.env.dist` (defaults) -> `.env` (local) -> `.env.{profile}` (profile-specific). Auto-detection of timezone, auto-creation of missing configs.
+### Centralized Configuration
+All sandbox config lives in a standard OS data directory:
+- Linux: `$XDG_DATA_HOME/sandbox` or `~/.local/share/sandbox`
+- macOS: `~/Library/Application Support/sandbox`
+- Windows: `%APPDATA%/sandbox`
+
+Override with `SANDBOX_DATA_DIR` env var.
+
+On first run, sandbox scaffolds this directory from bundled templates (`cli/data/`). This works for both `pip install .` and `pip install -e .`.
+
+Structure:
+```
+<data_dir>/
+  .env, .env.dist          # Environment config
+  config/                   # Tools, MCP, firewall, mounts, inspection
+  docker/                   # Dockerfiles, compose, scripts
+  logs/                     # Audit trail
+  projects/                 # Named project overrides
+```
+
+Profile-based config merging: `.env.dist` (defaults) -> `.env` (local) -> `.env.{profile}` (profile-specific). Every configurable value has a corresponding CLI command (`sandbox config set/get`, `sandbox tool add`, etc.).
 
 ### Secrets
-Pluggable provider interface: `local` (obfuscated file) or `env` (environment variables). Secrets injected into containers as env vars on start, never baked into images.
+Pluggable provider interface (`SecretsProvider` ABC): `local` (obfuscated file) or `env` (environment variables). Secrets injected into containers as env vars on start, never baked into images.
 
 ### Multi-Project
-Projects in `projects/<name>/` with isolated config, workspace, logs, and secrets. Container names scoped by `COMPOSE_PROJECT_NAME`. Active project resolved from `--project` flag, `SANDBOX_PROJECT` env var, or current directory.
+Projects in `<data_dir>/projects/<name>/` with isolated config and logs. Container names scoped by `COMPOSE_PROJECT_NAME`. Active project resolved from `--project` flag, `SANDBOX_PROJECT` env var, or current directory. Workspace is always a user-provided path.

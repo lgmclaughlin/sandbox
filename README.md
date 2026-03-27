@@ -13,20 +13,18 @@ Run AI coding assistants (Claude Code, Aider, etc.) inside a locked-down contain
 - **MCP server support**: Tool-agnostic MCP servers with automatic session-correlated logging via transparent wrapper
 - **Secrets management**: Encrypted local storage or environment variable injection for API keys
 - **Environment profiles**: Switch between dev, corp, and custom configurations
-- **Multi-project**: Run multiple isolated sandbox instances with separate configs, workspaces, and logs
-- **Zero-config start**: Clone, run `sandbox start`, and get a working environment with sensible defaults
+- **Multi-project**: Run multiple isolated sandbox instances with separate configs and logs
+- **Full CLI coverage**: Every configuration aspect manageable via commands
 - **Cross-platform**: Linux, macOS, and Windows support
 
 ## Quick start
 
 ```bash
-git clone <repo>
-cd sandbox
 pip install .
 sandbox start
 ```
 
-For development (editable install with test dependencies):
+On first run, sandbox scaffolds configuration to your OS data directory (`~/.local/share/sandbox/` on Linux). For development:
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
@@ -37,13 +35,16 @@ pip install -e ".[dev]"
 ```
 Lifecycle       sandbox start [path]|stop|restart|rebuild|status|attach
 Projects        sandbox init <name>|projects
-Tools           sandbox tool list|install|remove
-MCP             sandbox mcp list|enable|disable|logs
+Tools           sandbox tool list|install|remove|add|edit|show
+MCP             sandbox mcp list|enable|disable|add|edit|show|logs
 Secrets         sandbox secrets set|get|list|delete
-Firewall        sandbox fw ls|add|remove|apply|profiles|profile|logs
-Config          sandbox config show|profiles
-Logs            sandbox logs view|rotate|summary
-Observability   sandbox check|info|version
+Firewall        sandbox fw ls|add|remove|apply|profiles|profile|create-profile|edit-profile|logs
+Proxy           sandbox proxy status|logs
+Mounts          sandbox mount list|add|remove
+Inspection      sandbox inspect list|add|remove
+Config          sandbox config show|get|set|profiles|create-profile|edit|export|import|reset
+Logs            sandbox logs view|rotate|summary|export
+Observability   sandbox check|info|update|version
 ```
 
 ### Examples
@@ -54,12 +55,16 @@ sandbox start ~/projects/my-app         # Start with specific workspace
 sandbox start --env=corp                # Start with a specific profile
 sandbox --project billing start         # Start a named project
 sandbox init my-project -w ~/code/repo  # Initialize project with external workspace
+sandbox config set SANDBOX_LOG_FORMAT json  # Set a config value
+sandbox config show --path              # Show config directory location
+sandbox tool add my-tool --method pip --package my-pkg  # Create tool definition
+sandbox mcp add my-server --command node --args server.js  # Create MCP server
 sandbox fw add api.example.com          # Whitelist a domain
-sandbox fw profile dev                  # Apply dev firewall profile
-sandbox tool install aider              # Install a tool
-sandbox mcp enable filesystem           # Enable an MCP server
+sandbox fw create-profile staging --domains api.staging.com,cdn.staging.com
+sandbox mount add data --type rclone --remote s3:bucket/path --local ./data
+sandbox inspect add ssn --pattern '\b\d{3}-\d{2}-\d{4}\b' --action block
 sandbox secrets set API_KEY sk-...      # Store a secret
-sandbox config show                     # View merged configuration
+sandbox config export -o backup.json    # Export config for sharing
 sandbox check                           # Run compliance checks
 sandbox logs view --session <id>        # View full session trace
 sandbox info                            # Combined status + config overview
@@ -67,15 +72,19 @@ sandbox info                            # Combined status + config overview
 
 ## Configuration
 
-| File | Purpose |
-|------|---------|
-| `.env.dist` | Default configuration (committed) |
-| `.env` | Local overrides (gitignored, auto-created) |
-| `.env.{profile}` | Profile-specific config (e.g., `.env.corp`) |
+Configuration lives in the sandbox data directory (find with `sandbox config show --path`):
+
+| Directory | Contents |
+|-----------|----------|
+| `.env` / `.env.dist` | Environment variables |
 | `config/tools/` | AI tool definitions (Claude Code, Aider, Open Interpreter) |
-| `config/mcp/` | MCP server definitions (tool-agnostic) |
-| `config/mounts.yaml` | Remote mount definitions (rclone/sshfs) |
+| `config/mcp/` | MCP server definitions (filesystem, fetch) |
 | `config/firewall/profiles/` | Firewall domain profiles (dev, restricted) |
+| `config/network/` | Content inspection and DLP rules |
+| `config/mounts.yaml` | Remote mount definitions (rclone/sshfs) |
+| `docker/` | Dockerfiles, compose, firewall scripts |
+| `logs/` | Audit trail |
+| `projects/` | Named project overrides |
 
 ## Project structure
 
@@ -83,11 +92,9 @@ sandbox info                            # Combined status + config overview
 cli/                  # Python CLI (typer)
   commands/           # CLI command modules
   lib/                # Core libraries (config, docker, firewall, secrets, mcp, mounts)
-config/               # Tool definitions, MCP servers, mount config, firewall profiles
-docker/               # Dockerfiles, compose, firewall scripts, MCP log wrapper
-test/                 # pytest (unit + integration, 163 tests)
-projects/             # Multi-project instances (gitignored)
-logs/                 # Audit trail (gitignored)
+  data/               # Bundled templates (scaffolded to data dir on first run)
+test/                 # pytest (unit + integration, 184 tests)
+docs/                 # User guide, architecture, use cases, MCP guide, deployment guide
 ```
 
 ## Development
