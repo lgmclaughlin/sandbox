@@ -1,8 +1,10 @@
 """Logging and compliance commands."""
 
+import gzip
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 import typer
 
@@ -33,6 +35,18 @@ def rotate() -> None:
 def summary() -> None:
     """Show high-level log summary."""
     log_summary()
+
+
+@app.command()
+def export(
+    output: str = typer.Option("sandbox-logs.json", "--output", "-o", help="Output file path"),
+    format: str = typer.Option("json", "--format", "-f", help="Export format: json"),
+    session: str = typer.Option("", "--session", "-s", help="Export single session trace"),
+    from_date: Optional[str] = typer.Option(None, "--from", help="Start date (YYYY-MM-DD)"),
+    to_date: Optional[str] = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
+) -> None:
+    """Export logs as portable JSON."""
+    export_logs(output=output, session_id=session, from_date=from_date, to_date=to_date)
 
 
 def check() -> None:
@@ -261,6 +275,56 @@ def log_summary() -> None:
         typer.echo(f"  Total size: {total_size / 1024:.1f} KB")
 
 
+def export_logs(
+    output: str = "sandbox-logs.json",
+    session_id: str = "",
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> None:
+    """Export logs as portable JSON."""
+    log_dir = get_log_dir()
+    if not log_dir.exists():
+        typer.echo(typer.style("error: Log directory does not exist.", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    events = []
+    for jsonl_file in log_dir.rglob("*.jsonl"):
+        if from_date or to_date:
+            parent_name = jsonl_file.parent.name
+            if _is_date(parent_name):
+                if from_date and parent_name < from_date:
+                    continue
+                if to_date and parent_name > to_date:
+                    continue
+
+        for line in jsonl_file.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+                if session_id and event.get("session_id") != session_id:
+                    continue
+                events.append(event)
+            except json.JSONDecodeError:
+                continue
+
+    events.sort(key=lambda e: e.get("timestamp", ""))
+
+    output_path = Path(output)
+    output_path.write_text(json.dumps(events, indent=2) + "\n")
+
+    typer.echo(f"Exported {len(events)} events to {output_path}")
+
+
+def _is_date(s: str) -> bool:
+    """Check if string looks like YYYY-MM-DD."""
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
 def rotate_logs() -> None:
     """Rotate and clean up old logs based on retention policy."""
     env = load_env()
@@ -273,16 +337,31 @@ def rotate_logs() -> None:
         return
 
     cutoff = datetime.now() - timedelta(days=retention_days)
+    yesterday = datetime.now() - timedelta(days=1)
 
     removed = 0
+    compressed = 0
+
     for log_file in log_dir.rglob("*"):
         if not log_file.is_file():
             continue
 
+        if log_file.suffix == ".gz":
+            continue
+
         mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
+
         if mtime < cutoff:
             log_file.unlink()
             removed += 1
+        elif mtime < yesterday and log_file.suffix in (".jsonl", ".history", ".log"):
+            gz_path = log_file.with_suffix(log_file.suffix + ".gz")
+            if not gz_path.exists():
+                with open(log_file, "rb") as f_in:
+                    with gzip.open(gz_path, "wb") as f_out:
+                        f_out.write(f_in.read())
+                log_file.unlink()
+                compressed += 1
 
     for type_dir in log_dir.iterdir():
         if not type_dir.is_dir():
@@ -291,5 +370,10 @@ def rotate_logs() -> None:
             if date_dir.is_dir() and not any(date_dir.iterdir()):
                 date_dir.rmdir()
 
-    if removed:
-        typer.echo(f"Removed {removed} log files older than {retention_days} days.")
+    if removed or compressed:
+        parts = []
+        if removed:
+            parts.append(f"removed {removed} expired")
+        if compressed:
+            parts.append(f"compressed {compressed}")
+        typer.echo(f"Log rotation: {', '.join(parts)}.")

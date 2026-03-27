@@ -2,25 +2,44 @@
 set -euo pipefail
 
 LOG_DIR="/var/log/sandbox/firewall"
+PROJECT="${COMPOSE_PROJECT_NAME:-default}"
+LOG_SINKS="${SANDBOX_LOG_SINKS:-file}"
+
 mkdir -p "$LOG_DIR"
 
-TODAY=$(date +%Y-%m-%d)
-LOG_FILE="$LOG_DIR/$TODAY.jsonl"
+emit_event() {
+    local event_type="$1"
+    local dst="$2"
+    local port="$3"
+    local proto="$4"
+    local ts
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-# Read kernel log for iptables LOG entries and write as JSON
-# Runs as a background daemon in the firewall container
+    local today
+    today=$(date +%Y-%m-%d)
+    local log_file="$LOG_DIR/$today.jsonl"
+
+    local event
+    event=$(printf '{"timestamp":"%s","event_type":"%s","project":"%s","session_id":"","source":"firewall-log","payload":{"dst":"%s","port":"%s","proto":"%s"}}' \
+        "$ts" "$event_type" "$PROJECT" "$dst" "$port" "$proto")
+
+    if echo "$LOG_SINKS" | grep -q "file"; then
+        echo "$event" >> "$log_file"
+    fi
+
+    if echo "$LOG_SINKS" | grep -q "stdout"; then
+        echo "$event"
+    fi
+}
+
 tail -F /var/log/kern.log 2>/dev/null | while read -r line; do
     if echo "$line" | grep -q "SBX_"; then
-        TIMESTAMP=$(date -Iseconds)
         ACTION=""
-        DST=""
-        DPT=""
-        PROTO=""
 
         if echo "$line" | grep -q "SBX_ALLOW"; then
-            ACTION="allow"
+            ACTION="firewall_allow"
         elif echo "$line" | grep -q "SBX_BLOCK"; then
-            ACTION="block"
+            ACTION="firewall_block"
         else
             continue
         fi
@@ -29,7 +48,6 @@ tail -F /var/log/kern.log 2>/dev/null | while read -r line; do
         DPT=$(echo "$line" | grep -oP 'DPT=\K[^ ]+' || echo "unknown")
         PROTO=$(echo "$line" | grep -oP 'PROTO=\K[^ ]+' || echo "unknown")
 
-        printf '{"timestamp":"%s","action":"%s","dst":"%s","port":"%s","proto":"%s"}\n' \
-            "$TIMESTAMP" "$ACTION" "$DST" "$DPT" "$PROTO" >> "$LOG_FILE"
+        emit_event "$ACTION" "$DST" "$DPT" "$PROTO"
     fi
 done
