@@ -10,7 +10,10 @@ from docker.errors import DockerException, NotFound
 
 from cli.lib.config import PROJECT_ROOT, load_env, get_active_project_name, DEFAULT_LOG_DIR
 
+import yaml
+
 COMPOSE_FILE = PROJECT_ROOT / "docker" / "docker-compose.yml"
+COMPOSE_OVERRIDE_FILE = PROJECT_ROOT / "docker" / "docker-compose.override.yml"
 FIREWALL_SERVICE = "firewall"
 SANDBOX_SERVICE = "sandbox"
 
@@ -41,11 +44,51 @@ def _get_container(client: docker.DockerClient, service: str):
 def _compose_cmd() -> list[str]:
     env = load_env()
     project = env.get("COMPOSE_PROJECT_NAME", "project")
-    return [
+    cmd = [
         "docker", "compose",
         "-p", project,
         "-f", str(COMPOSE_FILE),
     ]
+    if COMPOSE_OVERRIDE_FILE.exists():
+        cmd.extend(["-f", str(COMPOSE_OVERRIDE_FILE)])
+    return cmd
+
+
+def _generate_override() -> None:
+    """Generate docker-compose.override.yml for conditional features."""
+    env = load_env()
+    override: dict = {"services": {}}
+    has_overrides = False
+
+    cpu_limit = env.get("SANDBOX_CPU_LIMIT", "")
+    mem_limit = env.get("SANDBOX_MEM_LIMIT", "")
+    if cpu_limit or mem_limit:
+        limits: dict = {}
+        if cpu_limit:
+            limits["cpus"] = cpu_limit
+        if mem_limit:
+            limits["memory"] = mem_limit
+        override["services"]["sandbox"] = {
+            "deploy": {"resources": {"limits": limits}}
+        }
+        has_overrides = True
+
+    hardened = env.get("SANDBOX_HARDENED_MODE", "").lower() == "true"
+    if hardened:
+        sandbox = override["services"].setdefault("sandbox", {})
+        sandbox["read_only"] = True
+        sandbox.setdefault("tmpfs", []).extend([
+            "/tmp:size=256m",
+            "/run:size=64m",
+            "/home/node:size=512m",
+        ])
+        sandbox["cap_drop"] = ["ALL"]
+        has_overrides = True
+
+    if has_overrides:
+        COMPOSE_OVERRIDE_FILE.write_text(yaml.dump(override, default_flow_style=False))
+    elif COMPOSE_OVERRIDE_FILE.exists():
+        COMPOSE_OVERRIDE_FILE.unlink()
 
 
 def _workspace_dir() -> Path:
@@ -93,8 +136,10 @@ def is_running(service: str) -> bool:
     return container is not None and container.status == "running"
 
 
-def start_containers(build: bool = False, secrets: dict[str, str] | None = None) -> None:
+def start_containers(build: bool = False, secrets: dict[str, str] | None = None, offline: bool = False) -> None:
     """Start firewall and sandbox containers."""
+    _generate_override()
+
     env = _compose_env()
 
     if secrets:
@@ -106,7 +151,7 @@ def start_containers(build: bool = False, secrets: dict[str, str] | None = None)
         subprocess.run([*base, "up", "-d", FIREWALL_SERVICE], env=env, check=True)
 
     if build or not is_running(FIREWALL_SERVICE):
-        _init_firewall()
+        _init_firewall(offline=offline)
 
     if build:
         subprocess.run([*base, "build", SANDBOX_SERVICE], env=env, check=True)
@@ -114,20 +159,27 @@ def start_containers(build: bool = False, secrets: dict[str, str] | None = None)
     subprocess.run([*base, "up", "-d", SANDBOX_SERVICE], env=env, check=True)
 
 
-def _init_firewall() -> None:
+def _init_firewall(offline: bool = False) -> None:
     """Initialize firewall rules and apply whitelist."""
     client = _get_client()
     container = _get_container(client, FIREWALL_SERVICE)
     if not container:
         return
 
-    container.exec_run("/usr/local/bin/firewall-init.sh", privileged=True)
+    if offline:
+        container.exec_run(
+            ["bash", "-c", "SANDBOX_OFFLINE_MODE=true /usr/local/bin/firewall-init.sh"],
+            privileged=True,
+        )
+    else:
+        container.exec_run("/usr/local/bin/firewall-init.sh", privileged=True)
 
     whitelist_src = PROJECT_ROOT / "docker" / "firewall" / "whitelist.txt"
     if whitelist_src.exists():
         data = whitelist_src.read_bytes()
         container.put_archive("/etc/firewall", _tar_single_file("whitelist.txt", data))
-        container.exec_run("/usr/local/bin/firewall-apply.sh", privileged=True)
+        if not offline:
+            container.exec_run("/usr/local/bin/firewall-apply.sh", privileged=True)
 
 
 def _tar_single_file(name: str, data: bytes) -> bytes:

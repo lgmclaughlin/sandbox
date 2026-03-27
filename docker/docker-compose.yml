@@ -13,6 +13,7 @@ services:
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-project}
       - SANDBOX_LOG_SINKS=${SANDBOX_LOG_SINKS:-file}
+      - SANDBOX_OFFLINE_MODE=${SANDBOX_OFFLINE_MODE:-false}
     volumes:
       - ${SANDBOX_LOG_DIR:-../logs}:/var/log/sandbox:rw
     stdin_open: true

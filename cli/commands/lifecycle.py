@@ -30,7 +30,7 @@ from cli.lib.platform import check_docker, is_quiet
 from cli.lib.secrets import get_secrets_for_container
 
 
-def start(attach: bool = True, env_profile: str = "", workspace: str | None = None) -> None:
+def start(attach: bool = True, env_profile: str = "", workspace: str | None = None, offline: bool = False) -> None:
     """Start the sandbox environment."""
     docker_err = check_docker()
     if docker_err:
@@ -39,6 +39,12 @@ def start(attach: bool = True, env_profile: str = "", workspace: str | None = No
 
     if env_profile:
         os.environ["SANDBOX_ENV"] = env_profile
+
+    env = ensure_env()
+    if offline or env.get("SANDBOX_OFFLINE_MODE", "").lower() == "true":
+        offline = True
+        if not is_quiet():
+            typer.echo("Offline mode enabled.")
 
     workspace_path = Path(workspace or ".").resolve()
     if not workspace_path.is_dir():
@@ -52,7 +58,6 @@ def start(attach: bool = True, env_profile: str = "", workspace: str | None = No
 
     if not is_quiet():
         typer.echo("Initializing configuration...")
-    env = ensure_env()
     ensure_config_dirs()
     ensure_mounts_config()
 
@@ -93,7 +98,7 @@ def start(attach: bool = True, env_profile: str = "", workspace: str | None = No
         typer.echo(f"Injecting {len(container_secrets)} secret(s) into container...")
 
     typer.echo("Starting containers...")
-    start_containers(build=not is_running("firewall"), secrets=container_secrets)
+    start_containers(build=not is_running("firewall"), secrets=container_secrets, offline=offline)
 
     typer.echo(typer.style("Sandbox is running.", fg=typer.colors.GREEN))
 

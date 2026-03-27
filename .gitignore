@@ -51,6 +51,9 @@ htmlcov/
 # Secrets
 .secrets/
 
+# Generated compose override
+docker/docker-compose.override.yml
+
 # Projects (user-created, not committed)
 projects/
 

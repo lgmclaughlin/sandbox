@@ -49,12 +49,16 @@ iptables -A INPUT  -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
 iptables -A INPUT  -i lo -j ACCEPT
 iptables -A OUTPUT -o lo -j ACCEPT
 
-echo "Fetching GitHub IP ranges..."
-GH_RANGES=$(curl -fsSL -A "Docker-Firewall-Script" https://api.github.com/meta || echo "")
-if [ -n "$GH_RANGES" ]; then
-  echo "$GH_RANGES" | jq -r '(.web + .api + .git)[] | select(contains(":") | not)' | aggregate -q | while read -r cidr; do
-    ipset add git-domains "$cidr"
-  done
+if [ "${SANDBOX_OFFLINE_MODE:-false}" = "true" ]; then
+  echo "Offline mode: skipping GitHub IP fetch"
+else
+  echo "Fetching GitHub IP ranges..."
+  GH_RANGES=$(curl -fsSL -A "Docker-Firewall-Script" https://api.github.com/meta || echo "")
+  if [ -n "$GH_RANGES" ]; then
+    echo "$GH_RANGES" | jq -r '(.web + .api + .git)[] | select(contains(":") | not)' | aggregate -q | while read -r cidr; do
+      ipset add git-domains "$cidr"
+    done
+  fi
 fi
 
 HOST_IP=$(ip route | awk '/default/ {print $3}')
@@ -80,9 +84,11 @@ iptables -A OUTPUT -j LOG --log-prefix "SBX_BLOCK " --log-level 4 2>/dev/null ||
 iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
 iptables -A FORWARD -j REJECT --reject-with icmp-admin-prohibited
 
-echo "Verifying firewall..."
-if ! curl --connect-timeout 5 https://api.github.com/zen >/dev/null 2>&1; then
-  echo "WARNING: GitHub connectivity check failed"
+if [ "${SANDBOX_OFFLINE_MODE:-false}" != "true" ]; then
+  echo "Verifying firewall..."
+  if ! curl --connect-timeout 5 https://api.github.com/zen >/dev/null 2>&1; then
+    echo "WARNING: GitHub connectivity check failed"
+  fi
 fi
 
 echo "Done."

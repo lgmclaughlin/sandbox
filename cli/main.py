@@ -76,9 +76,10 @@ def start(
     workspace: Optional[str] = typer.Argument(None, help="Workspace directory to mount (default: current directory)"),
     attach: bool = typer.Option(True, "--attach/--no-attach", help="Attach to shell after start"),
     env: str = typer.Option("", "--env", "-e", help="Environment profile to use"),
+    offline: bool = typer.Option(False, "--offline", help="Start without network-dependent operations"),
 ) -> None:
     """Start the sandbox environment."""
-    lifecycle.start(attach=attach, env_profile=env, workspace=workspace)
+    lifecycle.start(attach=attach, env_profile=env, workspace=workspace, offline=offline)
 
 
 @app.command(rich_help_panel=LIFECYCLE)
