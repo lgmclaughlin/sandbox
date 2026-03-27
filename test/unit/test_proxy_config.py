@@ -1,6 +1,6 @@
 """Unit tests for proxy mode configuration."""
 
-from cli.lib.docker import _is_proxy_mode, _generate_override, COMPOSE_OVERRIDE_FILE
+from cli.lib.docker import _is_proxy_mode, _generate_override, _compose_override_file
 
 
 class TestProxyMode:
@@ -22,78 +22,67 @@ class TestProxyMode:
 
 
 class TestGenerateOverride:
+    def _setup(self, tmp_path, monkeypatch):
+        (tmp_path / "docker").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("cli.lib.docker.get_data_dir", lambda: tmp_path)
+
     def test_no_overrides(self, tmp_path, monkeypatch):
-        override_file = tmp_path / "override.yml"
-        monkeypatch.setattr("cli.lib.docker.COMPOSE_OVERRIDE_FILE", override_file)
+        self._setup(tmp_path, monkeypatch)
         monkeypatch.setattr("cli.lib.docker.load_env", lambda: {})
-        monkeypatch.setattr("cli.lib.docker.PROJECT_ROOT", tmp_path)
 
         _generate_override()
-        assert not override_file.exists()
+        assert not _compose_override_file().exists()
 
     def test_cpu_limit(self, tmp_path, monkeypatch):
-        override_file = tmp_path / "override.yml"
-        monkeypatch.setattr("cli.lib.docker.COMPOSE_OVERRIDE_FILE", override_file)
+        self._setup(tmp_path, monkeypatch)
         monkeypatch.setattr("cli.lib.docker.load_env", lambda: {
             "SANDBOX_CPU_LIMIT": "2.0",
         })
-        monkeypatch.setattr("cli.lib.docker.PROJECT_ROOT", tmp_path)
 
         _generate_override()
-        assert override_file.exists()
-        content = override_file.read_text()
+        content = _compose_override_file().read_text()
         assert "cpus" in content
         assert "2.0" in content
 
     def test_mem_limit(self, tmp_path, monkeypatch):
-        override_file = tmp_path / "override.yml"
-        monkeypatch.setattr("cli.lib.docker.COMPOSE_OVERRIDE_FILE", override_file)
+        self._setup(tmp_path, monkeypatch)
         monkeypatch.setattr("cli.lib.docker.load_env", lambda: {
             "SANDBOX_MEM_LIMIT": "4g",
         })
-        monkeypatch.setattr("cli.lib.docker.PROJECT_ROOT", tmp_path)
 
         _generate_override()
-        assert override_file.exists()
-        content = override_file.read_text()
+        content = _compose_override_file().read_text()
         assert "memory" in content
 
     def test_hardened_mode(self, tmp_path, monkeypatch):
-        override_file = tmp_path / "override.yml"
-        monkeypatch.setattr("cli.lib.docker.COMPOSE_OVERRIDE_FILE", override_file)
+        self._setup(tmp_path, monkeypatch)
         monkeypatch.setattr("cli.lib.docker.load_env", lambda: {
             "SANDBOX_HARDENED_MODE": "true",
         })
-        monkeypatch.setattr("cli.lib.docker.PROJECT_ROOT", tmp_path)
 
         _generate_override()
-        assert override_file.exists()
-        content = override_file.read_text()
+        content = _compose_override_file().read_text()
         assert "read_only" in content
         assert "cap_drop" in content
         assert "tmpfs" in content
 
     def test_proxy_mode_override(self, tmp_path, monkeypatch):
-        override_file = tmp_path / "override.yml"
-        monkeypatch.setattr("cli.lib.docker.COMPOSE_OVERRIDE_FILE", override_file)
+        self._setup(tmp_path, monkeypatch)
         monkeypatch.setattr("cli.lib.docker.load_env", lambda: {
             "SANDBOX_PROXY_MODE": "proxy",
         })
-        monkeypatch.setattr("cli.lib.docker.PROJECT_ROOT", tmp_path)
 
         _generate_override()
-        assert override_file.exists()
-        content = override_file.read_text()
+        content = _compose_override_file().read_text()
         assert "HTTP_PROXY" in content
         assert "HTTPS_PROXY" in content
         assert "proxy_certs" in content
 
     def test_cleanup_when_no_overrides(self, tmp_path, monkeypatch):
-        override_file = tmp_path / "override.yml"
-        override_file.write_text("old content")
-        monkeypatch.setattr("cli.lib.docker.COMPOSE_OVERRIDE_FILE", override_file)
+        self._setup(tmp_path, monkeypatch)
+        override = _compose_override_file()
+        override.write_text("old content")
         monkeypatch.setattr("cli.lib.docker.load_env", lambda: {})
-        monkeypatch.setattr("cli.lib.docker.PROJECT_ROOT", tmp_path)
 
         _generate_override()
-        assert not override_file.exists()
+        assert not override.exists()

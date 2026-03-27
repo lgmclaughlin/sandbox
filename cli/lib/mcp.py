@@ -5,19 +5,23 @@ from pathlib import Path
 
 import yaml
 
-from cli.lib.config import PROJECT_ROOT, get_default_tool, load_env, load_tool_definition
+from cli.lib.config import get_default_tool, load_env, load_tool_definition
+from cli.lib.paths import get_data_dir
 
-MCP_DIR = PROJECT_ROOT / "config" / "mcp"
 MCP_LOG_WRAPPER = "/usr/local/bin/mcp-log-wrapper"
+
+
+def _mcp_dir() -> Path:
+    return get_data_dir() / "config" / "mcp"
 
 
 def list_mcp_servers() -> list[dict]:
     """List all MCP server definitions."""
-    if not MCP_DIR.exists():
+    if not _mcp_dir().exists():
         return []
 
     servers = []
-    for f in sorted(MCP_DIR.glob("*.yaml")):
+    for f in sorted(_mcp_dir().glob("*.yaml")):
         try:
             data = yaml.safe_load(f.read_text())
             if data:
@@ -29,7 +33,7 @@ def list_mcp_servers() -> list[dict]:
 
 def load_mcp_server(name: str) -> dict | None:
     """Load a specific MCP server definition."""
-    server_file = MCP_DIR / f"{name}.yaml"
+    server_file = _mcp_dir() / f"{name}.yaml"
     if not server_file.exists():
         return None
     return yaml.safe_load(server_file.read_text())
@@ -42,7 +46,7 @@ def get_enabled_servers() -> list[dict]:
 
 def set_server_enabled(name: str, enabled: bool) -> bool:
     """Enable or disable an MCP server. Returns True if changed."""
-    server_file = MCP_DIR / f"{name}.yaml"
+    server_file = _mcp_dir() / f"{name}.yaml"
     if not server_file.exists():
         return False
 
@@ -113,10 +117,10 @@ def write_mcp_config(tool_name: str | None = None) -> Path | None:
     config = generate_mcp_config(tool.get("name"))
     config_path = Path(config_path_str)
 
-    workspace_config = PROJECT_ROOT / "workspace" / config_path.name
-    workspace_config.write_text(json.dumps(config, indent=2) + "\n")
+    output = get_data_dir() / "mcp-config.json"
+    output.write_text(json.dumps(config, indent=2) + "\n")
 
-    return workspace_config
+    return output
 
 
 def get_mcp_domains() -> list[str]:

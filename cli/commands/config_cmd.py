@@ -2,7 +2,8 @@
 
 import typer
 
-from cli.lib.config import PROJECT_ROOT, get_active_profile, load_env
+from cli.lib.config import get_active_profile, load_env
+from cli.lib.paths import get_data_dir
 from cli.lib.secrets import mask_value
 
 app = typer.Typer(no_args_is_help=True)
@@ -37,7 +38,7 @@ def profiles() -> None:
     active = get_active_profile()
 
     found = False
-    for env_file in sorted(PROJECT_ROOT.glob(".env.*")):
+    for env_file in sorted(get_data_dir().glob(".env.*")):
         if env_file.name == ".env.dist":
             continue
         profile_name = env_file.name.removeprefix(".env.")

@@ -6,10 +6,16 @@ from pathlib import Path
 
 import yaml
 
-from cli.lib.config import PROJECT_ROOT
+from cli.lib.paths import get_data_dir
 
-WHITELIST_FILE = PROJECT_ROOT / "docker" / "firewall" / "whitelist.txt"
-PROFILES_DIR = PROJECT_ROOT / "config" / "firewall" / "profiles"
+
+def _whitelist_file() -> Path:
+    return get_data_dir() / "docker" / "firewall" / "whitelist.txt"
+
+
+def _profiles_dir() -> Path:
+    return get_data_dir() / "config" / "firewall" / "profiles"
+
 
 DOMAIN_PATTERN = re.compile(
     r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
@@ -23,11 +29,11 @@ def validate_domain(domain: str) -> bool:
 
 def read_whitelist() -> list[str]:
     """Read domains from whitelist file."""
-    if not WHITELIST_FILE.exists():
+    if not _whitelist_file().exists():
         return []
 
     domains = []
-    for line in WHITELIST_FILE.read_text().splitlines():
+    for line in _whitelist_file().read_text().splitlines():
         line = line.strip()
         if line and not line.startswith("#"):
             domains.append(line)
@@ -37,7 +43,7 @@ def read_whitelist() -> list[str]:
 def write_whitelist(domains: list[str]) -> None:
     """Write domains to whitelist file."""
     content = "\n".join(domains) + "\n"
-    WHITELIST_FILE.write_text(content)
+    _whitelist_file().write_text(content)
 
 
 def add_domain(domain: str) -> bool:
@@ -68,7 +74,7 @@ def apply_rules() -> tuple[bool, str]:
     if not container or container.status != "running":
         return False, "Firewall container is not running"
 
-    data = WHITELIST_FILE.read_bytes()
+    data = _whitelist_file().read_bytes()
     container.put_archive("/etc/firewall", _tar_single_file("whitelist.txt", data))
 
     exit_code, output = exec_in_firewall(["/usr/local/bin/firewall-apply.sh"])
@@ -91,11 +97,11 @@ def merge_tool_domains(tool_domains: list[str]) -> None:
 
 def list_profiles() -> list[dict]:
     """List available firewall profiles."""
-    if not PROFILES_DIR.exists():
+    if not _profiles_dir().exists():
         return []
 
     profiles = []
-    for f in sorted(PROFILES_DIR.glob("*.yaml")):
+    for f in sorted(_profiles_dir().glob("*.yaml")):
         try:
             data = yaml.safe_load(f.read_text())
             if data:
@@ -107,7 +113,7 @@ def list_profiles() -> list[dict]:
 
 def load_profile(name: str) -> dict | None:
     """Load a firewall profile by name."""
-    profile_file = PROFILES_DIR / f"{name}.yaml"
+    profile_file = _profiles_dir() / f"{name}.yaml"
     if not profile_file.exists():
         return None
     return yaml.safe_load(profile_file.read_text())

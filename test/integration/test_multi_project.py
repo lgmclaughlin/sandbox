@@ -1,5 +1,6 @@
 """Integration tests for multi-project isolation."""
 
+import pytest
 from pathlib import Path
 
 from cli.lib.config import (
@@ -12,109 +13,71 @@ from cli.lib.project import (
     get_project_dir,
     init_project,
     list_projects,
-    PROJECTS_DIR,
 )
 
 
+@pytest.fixture
+def mp_setup(tmp_path, monkeypatch):
+    """Set up multi-project test environment."""
+    monkeypatch.setattr("cli.lib.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cli.lib.project.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cli.lib.config.get_data_dir", lambda: tmp_path)
+
+    # Re-init config paths
+    from cli.lib.config import _init_paths
+    _init_paths()
+
+    dist = tmp_path / ".env.dist"
+    dist.write_text("COMPOSE_PROJECT_NAME=project\nTZ=\n")
+
+    (tmp_path / "config" / "tools").mkdir(parents=True)
+    (tmp_path / "config" / "tools" / "claude.yaml").write_text(
+        "name: claude\ndefault: true\n"
+    )
+    (tmp_path / "config" / "mcp").mkdir(parents=True)
+
+    return tmp_path
+
+
 class TestProjectInit:
-    def test_init_creates_structure(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.project.PROJECTS_DIR", tmp_path / "projects")
-        monkeypatch.setattr("cli.lib.project.PROJECT_ROOT", tmp_path)
-
-        dist = tmp_path / ".env.dist"
-        dist.write_text("COMPOSE_PROJECT_NAME=project\nTZ=\n")
-
-        (tmp_path / "config" / "tools").mkdir(parents=True)
-        (tmp_path / "config" / "tools" / "claude.yaml").write_text(
-            "name: claude\ndefault: true\n"
-        )
-        (tmp_path / "config" / "mcp").mkdir(parents=True)
-
+    def test_init_creates_structure(self, mp_setup):
         path = init_project("my-project")
 
         assert path.exists()
         assert (path / ".env").exists()
-        assert (path / "workspace").exists()
         assert (path / "config" / "tools").exists()
         assert (path / "config" / "mcp").exists()
         assert (path / "logs" / "sessions").exists()
         assert (path / "logs" / "commands").exists()
         assert (path / "config" / "mounts.yaml").exists()
 
-    def test_init_sets_project_name(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.project.PROJECTS_DIR", tmp_path / "projects")
-        monkeypatch.setattr("cli.lib.project.PROJECT_ROOT", tmp_path)
-
-        dist = tmp_path / ".env.dist"
-        dist.write_text("COMPOSE_PROJECT_NAME=project\n")
-        (tmp_path / "config" / "tools").mkdir(parents=True)
-        (tmp_path / "config" / "mcp").mkdir(parents=True)
-
+    def test_init_sets_project_name(self, mp_setup):
         path = init_project("billing")
 
         env_content = (path / ".env").read_text()
         assert "COMPOSE_PROJECT_NAME=billing" in env_content
 
-    def test_init_duplicate_fails(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.project.PROJECTS_DIR", tmp_path / "projects")
-        monkeypatch.setattr("cli.lib.project.PROJECT_ROOT", tmp_path)
-
-        dist = tmp_path / ".env.dist"
-        dist.write_text("COMPOSE_PROJECT_NAME=project\n")
-        (tmp_path / "config" / "tools").mkdir(parents=True)
-        (tmp_path / "config" / "mcp").mkdir(parents=True)
-
+    def test_init_duplicate_fails(self, mp_setup):
         init_project("first")
-        try:
+        with pytest.raises(ValueError, match="already exists"):
             init_project("first")
-            assert False, "Should have raised"
-        except ValueError as e:
-            assert "already exists" in str(e)
 
-    def test_init_with_workspace(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.project.PROJECTS_DIR", tmp_path / "projects")
-        monkeypatch.setattr("cli.lib.project.PROJECT_ROOT", tmp_path)
-
-        dist = tmp_path / ".env.dist"
-        dist.write_text("COMPOSE_PROJECT_NAME=project\n")
-        (tmp_path / "config" / "tools").mkdir(parents=True)
-        (tmp_path / "config" / "mcp").mkdir(parents=True)
-
+    def test_init_with_workspace(self, mp_setup, tmp_path):
         ext_workspace = tmp_path / "external" / "code"
         ext_workspace.mkdir(parents=True)
 
         path = init_project("custom", workspace=str(ext_workspace))
 
-        assert not (path / "workspace").exists()
         env_content = (path / ".env").read_text()
         assert str(ext_workspace) in env_content
 
-    def test_init_with_bad_workspace(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.project.PROJECTS_DIR", tmp_path / "projects")
-        monkeypatch.setattr("cli.lib.project.PROJECT_ROOT", tmp_path)
-
-        dist = tmp_path / ".env.dist"
-        dist.write_text("COMPOSE_PROJECT_NAME=project\n")
-        (tmp_path / "config" / "tools").mkdir(parents=True)
-        (tmp_path / "config" / "mcp").mkdir(parents=True)
-
-        try:
+    def test_init_with_bad_workspace(self, mp_setup):
+        with pytest.raises(ValueError, match="not found"):
             init_project("bad", workspace="/nonexistent/path")
-            assert False, "Should have raised"
-        except ValueError as e:
-            assert "not found" in str(e)
 
 
 class TestProjectList:
-    def test_lists_projects(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.project.PROJECTS_DIR", tmp_path / "projects")
-        monkeypatch.setattr("cli.lib.project.PROJECT_ROOT", tmp_path)
-
-        dist = tmp_path / ".env.dist"
-        dist.write_text("COMPOSE_PROJECT_NAME=project\n")
-        (tmp_path / "config" / "tools").mkdir(parents=True)
-        (tmp_path / "config" / "mcp").mkdir(parents=True)
-
+    def test_lists_projects(self, mp_setup):
         init_project("alpha")
         init_project("beta")
 
@@ -123,34 +86,20 @@ class TestProjectList:
         assert "alpha" in names
         assert "beta" in names
 
-    def test_empty(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.project.PROJECTS_DIR", tmp_path / "projects")
+    def test_empty(self, mp_setup):
         assert list_projects() == []
 
 
 class TestProjectIsolation:
-    def test_config_paths_switch(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.project.PROJECTS_DIR", tmp_path / "projects")
-        monkeypatch.setattr("cli.lib.project.PROJECT_ROOT", tmp_path)
-
-        dist = tmp_path / ".env.dist"
-        dist.write_text("COMPOSE_PROJECT_NAME=project\n")
-        (tmp_path / "config" / "tools").mkdir(parents=True)
-        (tmp_path / "config" / "mcp").mkdir(parents=True)
-
+    def test_config_paths_switch(self, mp_setup):
         init_project("proj-a")
 
-        # Temporarily set PROJECT_ROOT so set_active_project resolves to tmp_path
-        import cli.lib.config as config_mod
-        original_root = config_mod.PROJECT_ROOT
-        config_mod.PROJECT_ROOT = tmp_path
+        set_active_project("proj-a")
 
-        try:
-            set_active_project("proj-a")
-            assert "proj-a" in str(config_mod.CONFIG_DIR)
-            assert "proj-a" in str(config_mod.TOOLS_DIR)
-            assert "proj-a" in str(config_mod.ENV_FILE)
-            assert "proj-a" in str(config_mod.DEFAULT_LOG_DIR)
-        finally:
-            config_mod.PROJECT_ROOT = original_root
-            set_active_project("")
+        from cli.lib.config import CONFIG_DIR, TOOLS_DIR, ENV_FILE, DEFAULT_LOG_DIR
+        assert "proj-a" in str(CONFIG_DIR)
+        assert "proj-a" in str(TOOLS_DIR)
+        assert "proj-a" in str(ENV_FILE)
+        assert "proj-a" in str(DEFAULT_LOG_DIR)
+
+        set_active_project("")

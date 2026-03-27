@@ -14,8 +14,8 @@ from cli.lib.mcp import (
 class TestMcpLifecycle:
     def _setup_mcp(self, tmp_path, monkeypatch):
         """Set up MCP and tool directories for testing."""
-        mcp_dir = tmp_path / "mcp"
-        mcp_dir.mkdir()
+        mcp_dir = tmp_path / "config" / "mcp"
+        mcp_dir.mkdir(parents=True)
         (mcp_dir / "server-a.yaml").write_text(
             "name: server-a\n"
             "description: Server A\n"
@@ -34,7 +34,7 @@ class TestMcpLifecycle:
             "firewall:\n  domains:\n    - api.b.com\n"
             "env:\n  B_KEY: ''\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.MCP_DIR", mcp_dir)
+        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
 
         tools_dir = tmp_path / "tools"
         tools_dir.mkdir()
@@ -45,9 +45,6 @@ class TestMcpLifecycle:
             "  config_path: /home/user/.config/mcp.json\n"
         )
         monkeypatch.setattr("cli.lib.config.TOOLS_DIR", tools_dir)
-        monkeypatch.setattr("cli.lib.mcp.PROJECT_ROOT", tmp_path)
-
-        (tmp_path / "workspace").mkdir()
 
         return mcp_dir
 

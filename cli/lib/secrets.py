@@ -7,10 +7,8 @@ import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from cli.lib.config import PROJECT_ROOT, load_env
-
-
-SECRETS_DIR = PROJECT_ROOT / ".secrets"
+from cli.lib.config import load_env
+from cli.lib.paths import get_data_dir
 
 
 class SecretsProvider(ABC):
@@ -43,7 +41,7 @@ class LocalProvider(SecretsProvider):
     """
 
     def __init__(self, path: Path | None = None):
-        self.path = path or SECRETS_DIR / "local.json"
+        self.path = path or get_data_dir() / ".secrets" / "local.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._data = self._load()
 

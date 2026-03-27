@@ -26,7 +26,9 @@ from cli.lib.docker import (
 from cli.lib.firewall import merge_tool_domains
 from cli.lib.mcp import get_enabled_servers, get_mcp_domains, write_mcp_config
 from cli.lib.mounts import setup_mounts, unmount_all
+from cli.lib.paths import get_data_dir
 from cli.lib.platform import check_docker, is_quiet
+from cli.lib.scaffold import is_scaffolded, scaffold
 from cli.lib.secrets import get_secrets_for_container
 
 
@@ -36,6 +38,10 @@ def start(attach: bool = True, env_profile: str = "", workspace: str | None = No
     if docker_err:
         typer.echo(typer.style(f"error: {docker_err}", fg=typer.colors.RED), err=True)
         raise typer.Exit(1)
+
+    if not is_scaffolded():
+        data_dir = scaffold()
+        typer.echo(f"First run: initialized config at {data_dir}")
 
     if env_profile:
         os.environ["SANDBOX_ENV"] = env_profile

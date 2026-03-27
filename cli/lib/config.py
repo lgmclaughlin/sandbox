@@ -9,23 +9,33 @@ from pathlib import Path
 import yaml
 from dotenv import dotenv_values, set_key
 
+from cli.lib.paths import get_data_dir
 from cli.lib.platform import PLATFORM
 
-# Project root (relative to this file)
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+# Resolved at module load, updated by _init_paths() and set_active_project()
+PROJECT_ROOT = get_data_dir()
 
-# Config paths (updated by set_active_project)
 CONFIG_DIR = PROJECT_ROOT / "config"
 MOUNTS_FILE = CONFIG_DIR / "mounts.yaml"
 TOOLS_DIR = CONFIG_DIR / "tools"
 ENV_FILE = PROJECT_ROOT / ".env"
 ENV_DIST_FILE = PROJECT_ROOT / ".env.dist"
-
-# Log paths
 DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
 
-# Active project name (empty = root-level config)
 _active_project = ""
+
+
+def _init_paths() -> None:
+    """Re-initialize all paths from the current data directory."""
+    global PROJECT_ROOT, CONFIG_DIR, MOUNTS_FILE, TOOLS_DIR, ENV_FILE, ENV_DIST_FILE, DEFAULT_LOG_DIR
+
+    PROJECT_ROOT = get_data_dir()
+    CONFIG_DIR = PROJECT_ROOT / "config"
+    MOUNTS_FILE = CONFIG_DIR / "mounts.yaml"
+    TOOLS_DIR = CONFIG_DIR / "tools"
+    ENV_FILE = PROJECT_ROOT / ".env"
+    ENV_DIST_FILE = PROJECT_ROOT / ".env.dist"
+    DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
 
 
 def set_active_project(name: str) -> None:
@@ -35,11 +45,7 @@ def set_active_project(name: str) -> None:
     _active_project = name
 
     if not name:
-        CONFIG_DIR = PROJECT_ROOT / "config"
-        MOUNTS_FILE = CONFIG_DIR / "mounts.yaml"
-        TOOLS_DIR = CONFIG_DIR / "tools"
-        ENV_FILE = PROJECT_ROOT / ".env"
-        DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
+        _init_paths()
     else:
         project_dir = PROJECT_ROOT / "projects" / name
         CONFIG_DIR = project_dir / "config"
@@ -66,10 +72,10 @@ def get_log_dir() -> Path:
 
 def ensure_config_dirs() -> None:
     """Create config directories if they don't exist."""
-    CONFIG_DIR.mkdir(exist_ok=True)
-    TOOLS_DIR.mkdir(exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    TOOLS_DIR.mkdir(parents=True, exist_ok=True)
     log_dir = get_log_dir()
-    log_dir.mkdir(exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "sessions").mkdir(exist_ok=True)
     (log_dir / "commands").mkdir(exist_ok=True)
 
@@ -77,6 +83,7 @@ def ensure_config_dirs() -> None:
 def ensure_env() -> dict[str, str]:
     """Ensure .env exists (copy from .env.dist if missing) and return values."""
     if not ENV_FILE.exists() and ENV_DIST_FILE.exists():
+        ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ENV_DIST_FILE, ENV_FILE)
 
     env = load_env()
@@ -146,7 +153,7 @@ def _windows_tz_to_iana(windows_tz: str) -> str:
 def load_env() -> dict[str, str]:
     """Load environment variables with profile merging.
 
-    Merge order: .env.dist -> .env.{profile} -> .env -> CLI overrides
+    Merge order: .env.dist -> .env -> .env.{profile}
     """
     result = {}
 

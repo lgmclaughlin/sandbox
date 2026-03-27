@@ -7,14 +7,14 @@ from cli.lib.mcp import generate_mcp_config
 
 class TestPermissionGeneration:
     def test_no_permissions_when_disabled(self, tmp_path, monkeypatch):
-        mcp_dir = tmp_path / "mcp"
-        mcp_dir.mkdir()
+        mcp_dir = tmp_path / "config" / "mcp"
+        mcp_dir.mkdir(parents=True)
         (mcp_dir / "server.yaml").write_text(
             "name: server\nenabled: true\ncommand: node\nargs: [s.js]\n"
             "allowed_paths:\n  - /workspace\n"
             "validation:\n  blocked_patterns:\n    - '\\.\\./'\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.MCP_DIR", mcp_dir)
+        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
         monkeypatch.setattr("cli.lib.mcp.load_env", lambda: {
             "SANDBOX_ENFORCE_MCP_PERMISSIONS": "false",
         })
@@ -25,15 +25,15 @@ class TestPermissionGeneration:
         assert "MCP_ENFORCE" not in server_env
 
     def test_permissions_when_enabled(self, tmp_path, monkeypatch):
-        mcp_dir = tmp_path / "mcp"
-        mcp_dir.mkdir()
+        mcp_dir = tmp_path / "config" / "mcp"
+        mcp_dir.mkdir(parents=True)
         (mcp_dir / "server.yaml").write_text(
             "name: server\nenabled: true\ncommand: node\nargs: [s.js]\n"
             "allowed_paths:\n  - /workspace\n  - /tmp\n"
             "validation:\n  blocked_patterns:\n    - '\\.\\./'\n    - '/etc/'\n"
             "permissions:\n  - filesystem: read\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.MCP_DIR", mcp_dir)
+        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
         monkeypatch.setattr("cli.lib.mcp.load_env", lambda: {
             "SANDBOX_ENFORCE_MCP_PERMISSIONS": "true",
         })
@@ -48,12 +48,12 @@ class TestPermissionGeneration:
         assert "/etc/" in perms["blocked_patterns"]
 
     def test_empty_permissions(self, tmp_path, monkeypatch):
-        mcp_dir = tmp_path / "mcp"
-        mcp_dir.mkdir()
+        mcp_dir = tmp_path / "config" / "mcp"
+        mcp_dir.mkdir(parents=True)
         (mcp_dir / "server.yaml").write_text(
             "name: server\nenabled: true\ncommand: node\nargs: [s.js]\nenv: {}\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.MCP_DIR", mcp_dir)
+        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
         monkeypatch.setattr("cli.lib.mcp.load_env", lambda: {
             "SANDBOX_ENFORCE_MCP_PERMISSIONS": "true",
         })
@@ -65,8 +65,8 @@ class TestPermissionGeneration:
         assert perms["blocked_patterns"] == []
 
     def test_multiple_servers_independent(self, tmp_path, monkeypatch):
-        mcp_dir = tmp_path / "mcp"
-        mcp_dir.mkdir()
+        mcp_dir = tmp_path / "config" / "mcp"
+        mcp_dir.mkdir(parents=True)
         (mcp_dir / "fs.yaml").write_text(
             "name: fs\nenabled: true\ncommand: node\nargs: [fs.js]\n"
             "allowed_paths:\n  - /workspace\n"
@@ -76,7 +76,7 @@ class TestPermissionGeneration:
             "allowed_paths: []\n"
             "permissions:\n  - network: read\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.MCP_DIR", mcp_dir)
+        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
         monkeypatch.setattr("cli.lib.mcp.load_env", lambda: {
             "SANDBOX_ENFORCE_MCP_PERMISSIONS": "true",
         })

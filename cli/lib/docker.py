@@ -8,15 +8,22 @@ from pathlib import Path
 import docker
 from docker.errors import DockerException, NotFound
 
-from cli.lib.config import PROJECT_ROOT, load_env, get_active_project_name, DEFAULT_LOG_DIR
+from cli.lib.config import load_env, get_active_project_name
+from cli.lib.paths import get_data_dir
 
 import yaml
 
-COMPOSE_FILE = PROJECT_ROOT / "docker" / "docker-compose.yml"
-COMPOSE_OVERRIDE_FILE = PROJECT_ROOT / "docker" / "docker-compose.override.yml"
 FIREWALL_SERVICE = "firewall"
 PROXY_SERVICE = "proxy"
 SANDBOX_SERVICE = "sandbox"
+
+
+def _compose_file() -> Path:
+    return get_data_dir() / "docker" / "docker-compose.yml"
+
+
+def _compose_override_file() -> Path:
+    return get_data_dir() / "docker" / "docker-compose.override.yml"
 
 
 def _get_project_name() -> str:
@@ -53,10 +60,10 @@ def _compose_cmd() -> list[str]:
     cmd = [
         "docker", "compose",
         "-p", project,
-        "-f", str(COMPOSE_FILE),
+        "-f", str(_compose_file()),
     ]
-    if COMPOSE_OVERRIDE_FILE.exists():
-        cmd.extend(["-f", str(COMPOSE_OVERRIDE_FILE)])
+    if _compose_override_file().exists():
+        cmd.extend(["-f", str(_compose_override_file())])
     if _is_proxy_mode():
         cmd.extend(["--profile", "proxy"])
     return cmd
@@ -106,7 +113,7 @@ def _generate_override() -> None:
         )
         has_overrides = True
 
-        inspection_file = PROJECT_ROOT / "config" / "network" / "inspection.yaml"
+        inspection_file = get_data_dir() / "config" / "network" / "inspection.yaml"
         if inspection_file.exists():
             proxy = override["services"].setdefault("proxy", {})
             proxy.setdefault("volumes", []).append(
@@ -114,9 +121,9 @@ def _generate_override() -> None:
             )
 
     if has_overrides:
-        COMPOSE_OVERRIDE_FILE.write_text(yaml.dump(override, default_flow_style=False))
-    elif COMPOSE_OVERRIDE_FILE.exists():
-        COMPOSE_OVERRIDE_FILE.unlink()
+        _compose_override_file().write_text(yaml.dump(override, default_flow_style=False))
+    elif _compose_override_file().exists():
+        _compose_override_file().unlink()
 
 
 def _workspace_dir() -> Path:
@@ -135,12 +142,12 @@ def _workspace_dir() -> Path:
     from_config = env.get("SANDBOX_WORKSPACE_DIR", "")
     if from_config:
         path = Path(from_config)
-        return path if path.is_absolute() else PROJECT_ROOT / path
+        return path if path.is_absolute() else get_data_dir() / path
 
     project = get_active_project_name()
     if project:
-        return PROJECT_ROOT / "projects" / project / "workspace"
-    return PROJECT_ROOT / "workspace"
+        return get_data_dir() / "projects" / project / "workspace"
+    return get_data_dir() / "workspace"
 
 
 def _compose_env() -> dict[str, str]:
@@ -211,7 +218,7 @@ def _init_firewall(offline: bool = False) -> None:
     else:
         container.exec_run("/usr/local/bin/firewall-init.sh", privileged=True)
 
-    whitelist_src = PROJECT_ROOT / "docker" / "firewall" / "whitelist.txt"
+    whitelist_src = get_data_dir() / "docker" / "firewall" / "whitelist.txt"
     if whitelist_src.exists():
         data = whitelist_src.read_bytes()
         container.put_archive("/etc/firewall", _tar_single_file("whitelist.txt", data))

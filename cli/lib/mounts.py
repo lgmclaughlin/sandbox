@@ -3,7 +3,8 @@
 import subprocess
 from pathlib import Path
 
-from cli.lib.config import PROJECT_ROOT, load_mounts
+from cli.lib.config import load_mounts
+from cli.lib.paths import get_data_dir
 from cli.lib.platform import IS_WINDOWS, check_rclone, check_sshfs
 
 
@@ -27,7 +28,7 @@ def setup_mounts() -> list[dict]:
 
         local_path = Path(local)
         if not local_path.is_absolute():
-            local_path = PROJECT_ROOT / local_path
+            local_path = get_data_dir() / local_path
 
         local_path.mkdir(parents=True, exist_ok=True)
 
@@ -131,7 +132,7 @@ def unmount_all() -> None:
 
         local_path = Path(local)
         if not local_path.is_absolute():
-            local_path = PROJECT_ROOT / local_path
+            local_path = get_data_dir() / local_path
 
         if _is_mounted(local_path):
             _unmount(local_path)
