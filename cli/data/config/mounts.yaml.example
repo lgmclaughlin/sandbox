@@ -1,0 +1,31 @@
+# Mount configuration for sandbox
+#
+# Each mount defines a remote source to mount into the workspace.
+# Supported types: rclone, sshfs
+#
+# Fields:
+#   name:     Identifier for this mount
+#   type:     Mount method (rclone or sshfs)
+#   remote:   Remote path (rclone remote:path or user@host:/path)
+#   local:    Local mount point (relative to project root)
+#   options:  Mount-specific options (optional)
+#
+# Examples:
+#
+# mounts:
+#   - name: cloud-storage
+#     type: rclone
+#     remote: "s3:my-bucket/projects"
+#     local: ./workspace/cloud
+#     options:
+#       vfs-cache-mode: full
+#
+#   - name: staging-server
+#     type: sshfs
+#     remote: "user@staging:/var/data"
+#     local: ./workspace/staging
+#     options:
+#       reconnect: true
+#       cache: false
+
+mounts: []

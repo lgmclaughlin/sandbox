@@ -28,6 +28,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["cli*"]
 
+[tool.setuptools.package-data]
+cli = ["data/**/*", "data/.env.dist"]
+
 [tool.pytest.ini_options]
 testpaths = ["test"]
 python_files = ["test_*.py"]

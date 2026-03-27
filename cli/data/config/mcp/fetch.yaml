@@ -1,0 +1,20 @@
+name: fetch
+description: HTTP fetch server for safe API access
+enabled: false
+command: npx
+args: ["-y", "@modelcontextprotocol/server-fetch"]
+
+permissions:
+  - network: read
+  - filesystem: none
+
+allowed_paths: []
+
+validation:
+  blocked_patterns: []
+
+firewall:
+  domains:
+    - registry.npmjs.org
+
+env: {}

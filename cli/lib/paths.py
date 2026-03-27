@@ -41,10 +41,11 @@ def get_data_dir() -> Path:
 def get_package_data_dir() -> Path:
     """Get the directory containing bundled package data (templates).
 
-    This is the repo directory when installed with -e, or the
-    installed package location otherwise.
+    Points to cli/data/ which contains docker/, config/, .env.dist.
+    Works for both editable and non-editable installs since the data
+    files are inside the cli package itself.
     """
-    return Path(__file__).parent.parent.parent
+    return Path(__file__).parent.parent / "data"
 
 
 def ensure_data_dir() -> Path:

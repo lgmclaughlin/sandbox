@@ -1,0 +1,8 @@
+name: dev
+description: Development environment defaults
+domains:
+  - registry.npmjs.org
+  - pypi.org
+  - files.pythonhosted.org
+  - api.github.com
+  - github.com

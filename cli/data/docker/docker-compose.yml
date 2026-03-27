@@ -1,0 +1,77 @@
+services:
+  firewall:
+    build:
+      context: ./firewall
+      dockerfile: Dockerfile_firewall
+    container_name: ${COMPOSE_PROJECT_NAME:-project}_firewall
+    network_mode: bridge
+    security_opt:
+      - no-new-privileges:false
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-project}
+      - SANDBOX_LOG_SINKS=${SANDBOX_LOG_SINKS:-file}
+      - SANDBOX_OFFLINE_MODE=${SANDBOX_OFFLINE_MODE:-false}
+    volumes:
+      - ${SANDBOX_LOG_DIR:-../logs}:/var/log/sandbox:rw
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  proxy:
+    image: mitmproxy/mitmproxy:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-project}_proxy
+    network_mode: "service:firewall"
+    entrypoint: ["mitmdump", "--set", "block_global=false", "-s", "/opt/proxy/addon.py"]
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-project}
+      - SANDBOX_LOG_SINKS=${SANDBOX_LOG_SINKS:-file}
+      - SANDBOX_DLP_PROVIDER=${SANDBOX_DLP_PROVIDER:-none}
+      - SANDBOX_DLP_WEBHOOK_URL=${SANDBOX_DLP_WEBHOOK_URL:-}
+    volumes:
+      - ../docker/proxy/addon.py:/opt/proxy/addon.py:ro
+      - ${SANDBOX_LOG_DIR:-../logs}:/var/log/sandbox:rw
+      - proxy_certs:/home/mitmproxy/.mitmproxy
+    profiles:
+      - proxy
+    restart: unless-stopped
+
+  sandbox:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        TZ: ${TZ:-UTC}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+        CUSTOM_CA_CERT_PATH: ${CUSTOM_CA_CERT_PATH:-}
+    container_name: ${COMPOSE_PROJECT_NAME:-project}_sandbox
+    network_mode: "service:firewall"
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-project}
+      - SANDBOX_LOG_FORMAT=${SANDBOX_LOG_FORMAT:-text}
+      - SANDBOX_LOG_SINKS=${SANDBOX_LOG_SINKS:-file}
+      - SANDBOX_LOG_OTEL_COMPAT=${SANDBOX_LOG_OTEL_COMPAT:-false}
+      - SANDBOX_LOG_MAX_PAYLOAD_BYTES=${SANDBOX_LOG_MAX_PAYLOAD_BYTES:-0}
+      - SANDBOX_ENFORCE_MCP_PERMISSIONS=${SANDBOX_ENFORCE_MCP_PERMISSIONS:-false}
+      - SANDBOX_SESSION_ID
+    volumes:
+      - ${SANDBOX_WORKSPACE_DIR:-../workspace}:/workspace:rw,delegated
+      - ${SANDBOX_LOG_DIR:-../logs}:/var/log/sandbox:rw
+    security_opt:
+      - no-new-privileges:true
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "whoami | grep -v root"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  proxy_certs:

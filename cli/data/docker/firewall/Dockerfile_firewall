@@ -1,0 +1,31 @@
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  iptables \
+  ipset \
+  iproute2 \
+  curl \
+  jq \
+  dnsutils \
+  aggregate \
+  ca-certificates \
+  rsyslog \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY firewall-init.sh /usr/local/bin/firewall-init.sh
+RUN chmod +x /usr/local/bin/firewall-init.sh
+
+COPY firewall-apply.sh /usr/local/bin/firewall-apply.sh
+RUN chmod +x /usr/local/bin/firewall-apply.sh
+
+COPY firewall-log.sh /usr/local/bin/firewall-log.sh
+RUN chmod +x /usr/local/bin/firewall-log.sh
+
+RUN mkdir -p /etc/firewall /var/log/sandbox/firewall
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD iptables -L -n > /dev/null 2>&1 || exit 1
+
+CMD ["bash"]

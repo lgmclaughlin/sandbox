@@ -1,0 +1,24 @@
+allowed_paths:
+- /workspace
+args:
+- -y
+- '@modelcontextprotocol/server-filesystem'
+- /workspace
+command: npx
+description: Official MCP filesystem server for safe file access
+enabled: false
+env: {}
+firewall:
+  domains:
+  - registry.npmjs.org
+name: filesystem
+permissions:
+- filesystem: read
+- filesystem: write
+- network: none
+validation:
+  blocked_patterns:
+  - \.\./
+  - /etc/
+  - /proc/
+  - /sys/

@@ -50,6 +50,7 @@ class TestGetDataDir:
 
 
 class TestGetPackageDataDir:
-    def test_returns_repo_root(self):
+    def test_returns_data_dir(self):
         path = get_package_data_dir()
-        assert (path / "pyproject.toml").exists() or (path / "cli").exists()
+        assert path.name == "data"
+        assert (path / ".env.dist").exists()

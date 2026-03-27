@@ -1,0 +1,24 @@
+name: aider
+description: AI pair programming in your terminal
+default: false
+
+install:
+  method: pip
+  package: aider-chat
+  global: false
+
+mcp:
+  config_path: ""
+
+firewall:
+  domains:
+    - api.anthropic.com
+    - api.openai.com
+    - pypi.org
+    - files.pythonhosted.org
+
+env:
+  ANTHROPIC_API_KEY: ""
+  OPENAI_API_KEY: ""
+
+volumes: []
