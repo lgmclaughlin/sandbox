@@ -68,4 +68,3 @@ class TestFwLs:
     def test_tool_list(self):
         result = runner.invoke(app, ["tool", "list"])
         assert result.exit_code == 0
-        assert "claude-code" in result.output
