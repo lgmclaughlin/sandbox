@@ -2,24 +2,27 @@
 
 ## Installation
 
-Requires Python 3.11+ and Docker.
+Requires Python 3.11+, Docker, and [pipx](https://pipx.pypa.io/).
 
-### System-wide
+### Install pipx
+
+```bash
+pacman -S python-pipx    # Arch
+brew install pipx         # macOS
+apt install pipx          # Debian/Ubuntu
+```
+
+### Install sandbox
 
 ```bash
 git clone <repo>
 cd sandbox
-pip install .
+pipx install .
 ```
 
-This installs the `sandbox` command to your PATH. Location varies by platform:
-- **Linux**: `~/.local/bin/sandbox`
-- **macOS**: `~/.local/bin/sandbox` (or `~/Library/Python/3.x/bin/` depending on Python install)
-- **Windows**: `%APPDATA%\Python\Scripts\sandbox.exe`
+The `sandbox` command is now available system-wide. pipx manages an isolated environment behind the scenes.
 
-Ensure the install location is in your PATH. Works from any directory without activating a venv.
-
-### Development (editable, venv-scoped)
+### Development (editable install)
 
 **Linux / macOS:**
 ```bash
@@ -38,7 +41,7 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
-The `sandbox` command is available inside the venv. Changes to the source code are reflected immediately.
+The `sandbox` command is available inside the venv. Changes to source code are reflected immediately.
 
 ## Quick Start
 

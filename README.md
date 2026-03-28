@@ -51,11 +51,18 @@ Firewall Container (enforces all egress)
 ## Quick Start
 
 ```bash
-pip install .
+pipx install .
 sandbox start
 ```
 
 On first run, configuration is scaffolded to your OS data directory. Find it with `sandbox config show --path`.
+
+Requires Python 3.11+, Docker, and [pipx](https://pipx.pypa.io/):
+```bash
+pacman -S python-pipx    # Arch
+brew install pipx         # macOS
+apt install pipx          # Debian/Ubuntu
+```
 
 ## Example: Blocked Network Request
 
