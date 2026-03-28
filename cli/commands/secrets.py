@@ -17,6 +17,11 @@ def set(
     try:
         provider.set(key, value)
         typer.echo(f"Secret '{key}' stored.")
+
+        from cli.lib.docker import is_running
+        if is_running("sandbox"):
+            typer.echo(typer.style("  Restart sandbox for changes to take effect.",
+                                   fg=typer.colors.YELLOW))
     except RuntimeError as e:
         typer.echo(typer.style(f"error: {e}", fg=typer.colors.RED), err=True)
         raise typer.Exit(1)
