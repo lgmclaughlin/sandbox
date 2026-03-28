@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   dnsutils \
   aggregate \
   ca-certificates \
-  rsyslog \
+  procps \
+  ulogd2 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY firewall-init.sh /usr/local/bin/firewall-init.sh
@@ -23,9 +24,14 @@ RUN chmod +x /usr/local/bin/firewall-apply.sh
 COPY firewall-log.sh /usr/local/bin/firewall-log.sh
 RUN chmod +x /usr/local/bin/firewall-log.sh
 
+COPY ulogd.conf /etc/ulogd.conf
+
+COPY entrypoint-firewall.sh /usr/local/bin/entrypoint-firewall.sh
+RUN chmod +x /usr/local/bin/entrypoint-firewall.sh
+
 RUN mkdir -p /etc/firewall /var/log/sandbox/firewall
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD iptables -L -n > /dev/null 2>&1 || exit 1
 
-CMD ["bash"]
+CMD ["/usr/local/bin/entrypoint-firewall.sh"]

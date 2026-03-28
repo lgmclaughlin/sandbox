@@ -154,10 +154,12 @@ def read_firewall_logs(log_dir: Path, action: str = "all", lines: int = 50) -> l
                 continue
             try:
                 entry = json.loads(line)
-                if action == "all" or entry.get("action") == action:
-                    entries.append(entry)
-                    if len(entries) >= lines:
-                        return entries
+                event_type = entry.get("event_type", "")
+                if action != "all" and action not in event_type:
+                    continue
+                entries.append(entry)
+                if len(entries) >= lines:
+                    return entries
             except json.JSONDecodeError:
                 continue
     return entries

@@ -23,6 +23,17 @@ E2E_DATA_DIR = Path("/tmp/sandbox-e2e-test")
 E2E_WORKSPACE = Path("/tmp/sandbox-e2e-workspace")
 
 
+def _cleanup_data_dir():
+    """Remove E2E data dir, handling root-owned files from containers."""
+    if not E2E_DATA_DIR.exists():
+        return
+    subprocess.run(["docker", "run", "--rm", "-v",
+                    f"{E2E_DATA_DIR}:/cleanup", "debian:bookworm-slim",
+                    "rm", "-rf", "/cleanup/logs/firewall"],
+                   capture_output=True)
+    shutil.rmtree(E2E_DATA_DIR, ignore_errors=True)
+
+
 def sandbox(*args: str, check: bool = False, **kwargs) -> subprocess.CompletedProcess:
     """Run sandbox CLI command for E2E tests."""
     env = {**os.environ, "SANDBOX_DATA_DIR": str(E2E_DATA_DIR)}
@@ -56,8 +67,8 @@ def e2e_environment():
         pytest.skip("Docker not available")
 
     # Clean slate
-    if E2E_DATA_DIR.exists():
-        shutil.rmtree(E2E_DATA_DIR)
+    sandbox("stop", capture_output=True)
+    _cleanup_data_dir()
     E2E_WORKSPACE.mkdir(parents=True, exist_ok=True)
     (E2E_WORKSPACE / "test-file.txt").write_text("hello from e2e test\n")
 
@@ -79,7 +90,6 @@ def e2e_environment():
 
     # Teardown
     sandbox("stop")
-    if E2E_DATA_DIR.exists():
-        shutil.rmtree(E2E_DATA_DIR)
+    _cleanup_data_dir()
     if E2E_WORKSPACE.exists():
-        shutil.rmtree(E2E_WORKSPACE)
+        shutil.rmtree(E2E_WORKSPACE, ignore_errors=True)

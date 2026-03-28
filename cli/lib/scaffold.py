@@ -38,6 +38,8 @@ SCAFFOLD_FILES = {
     "docker/firewall/firewall-init.sh": "docker/firewall/firewall-init.sh",
     "docker/firewall/firewall-apply.sh": "docker/firewall/firewall-apply.sh",
     "docker/firewall/firewall-log.sh": "docker/firewall/firewall-log.sh",
+    "docker/firewall/entrypoint-firewall.sh": "docker/firewall/entrypoint-firewall.sh",
+    "docker/firewall/ulogd.conf": "docker/firewall/ulogd.conf",
     "docker/firewall/whitelist.txt": "docker/firewall/whitelist.txt",
     "docker/proxy/addon.py": "docker/proxy/addon.py",
 }

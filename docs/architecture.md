@@ -9,7 +9,7 @@ Host Machine
 └── Docker
     ├── firewall container (NET_ADMIN, iptables, ipset)
     │   ├── Manages all network rules
-    │   ├── Firewall log daemon (SBX_ALLOW/SBX_BLOCK)
+    │   ├── ulogd2 + firewall log daemon (NFLOG → JSONL)
     │   └── Shared network stack with proxy and sandbox
     │
     ├── proxy container (optional, mitmproxy)
@@ -28,6 +28,11 @@ Host Machine
 
 All containers share the firewall's network stack. The sandbox has no independent network access.
 
+### Trust boundaries
+- **Sandbox container**: untrusted. No capabilities, non-root, `no-new-privileges: true`.
+- **Firewall container**: trusted enforcement boundary. Requires `NET_ADMIN` and `NET_RAW` to configure iptables, scoped to its own bridge-isolated network namespace (cannot modify host networking). Connection logging via NFLOG + ulogd2 (userspace, no extra capabilities).
+- **Proxy container**: optional. No special capabilities. Shares firewall network.
+
 ## Layer 1: Runtime
 
 The sandbox container runs as non-root (`USER node`). Security features:
@@ -35,6 +40,7 @@ The sandbox container runs as non-root (`USER node`). Security features:
 - Optional hardened mode: read-only filesystem, all capabilities dropped, tmpfs for writable paths
 - Optional resource limits via `docker-compose.override.yml` (auto-generated)
 - Health check verifies non-root execution
+- Container keepalive entrypoint (`sleep infinity`), sessions managed via `session-wrapper.sh`
 
 ## Layer 2: Data Access
 
@@ -85,7 +91,7 @@ Firewall apply is atomic: domains resolve into a temporary ipset, then `ipset sw
 Named sets of domains in `config/firewall/profiles/*.yaml`. When applied, profile domains merge with tool-specific domains. Profiles: `dev` (common registries), `restricted` (no domains).
 
 ### Firewall Logging
-iptables LOG rules with `SBX_ALLOW`/`SBX_BLOCK` prefixes. A log daemon parses kernel log and writes unified event envelopes to `logs/firewall/`.
+iptables NFLOG rules send packets to userspace via netlink. ulogd2 captures them and writes to log files. A daemon parses these into unified event envelopes at `logs/firewall/`. No kernel log access required.
 
 ### TLS Proxy (optional)
 When `SANDBOX_PROXY_MODE=proxy`:

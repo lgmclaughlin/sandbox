@@ -209,6 +209,41 @@ This enables:
 
 Verify with `sandbox check`.
 
+## Security Model and Capabilities
+
+### Container privilege breakdown
+
+| Container | Capabilities | Network Mode | Privileges | Purpose |
+|-----------|-------------|--------------|------------|---------|
+| **Sandbox** | None (all dropped in hardened mode) | `service:firewall` (shared) | `no-new-privileges: true`, non-root user | Untrusted execution |
+| **Firewall** | `NET_ADMIN`, `NET_RAW` | `bridge` (isolated) | `no-new-privileges: false` | Network enforcement |
+| **Proxy** (optional) | None | `service:firewall` (shared) | Default | TLS inspection |
+
+### Why the firewall needs capabilities
+
+**NET_ADMIN and NET_RAW** are required to configure iptables rules and ipsets. These are used exclusively to set up egress filtering for the sandbox container. The firewall container uses `network_mode: bridge`, giving it its own isolated network namespace. These capabilities modify the container's own network rules, not the host's.
+
+**What these capabilities cannot do in this configuration:**
+- Cannot modify host iptables (bridge mode isolates the namespace)
+- Cannot access host network interfaces
+- Cannot affect other containers outside this compose project
+
+### Blast radius analysis
+
+If the **sandbox container** is compromised:
+- No capabilities to escalate with
+- Cannot modify network rules (no NET_ADMIN)
+- All traffic still passes through the firewall
+- Cannot reach the host filesystem (only /workspace and /var/log/sandbox are mounted)
+
+If the **firewall container** is compromised:
+- Can modify its own network routing (bridge-isolated, not the host)
+- Cannot access the host network namespace
+- Worst case: sandbox loses internet access or firewall rules are disabled for this project's containers
+- Other containers and the host are unaffected
+
+The sandbox cannot escalate to the firewall. They are separate containers with no shared access beyond the network namespace.
+
 ## Compliance Checklist
 
 | Requirement | How Sandbox Addresses It |
@@ -217,6 +252,7 @@ Verify with `sandbox check`.
 | PII not sent to AI APIs | Content inspection rules + DLP webhook |
 | Audit trail of all actions | Unified event logging with session correlation |
 | Non-root execution | Container runs as `node` user, `no-new-privileges` |
+| Minimal capabilities | Sandbox: none. Firewall: NET_ADMIN, NET_RAW (bridge-isolated) |
 | Resource isolation | CPU/memory limits, separate network namespace |
 | Credential management | Secrets provider, never in Docker images |
 | MCP access control | Permission enforcement with path validation |

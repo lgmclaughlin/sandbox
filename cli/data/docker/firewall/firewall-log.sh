@@ -1,9 +1,16 @@
 #!/bin/bash
-set -euo pipefail
+
+# Firewall log daemon.
+# Parses ulogd2 output files for NFLOG entries and writes
+# unified event envelopes to the audit volume.
 
 LOG_DIR="/var/log/sandbox/firewall"
 PROJECT="${COMPOSE_PROJECT_NAME:-default}"
 LOG_SINKS="${SANDBOX_LOG_SINKS:-file}"
+ULOG_DIR="/var/log/sandbox/firewall"
+
+ALLOW_LOG="$ULOG_DIR/ulogd_allow.log"
+BLOCK_LOG="$ULOG_DIR/ulogd_block.log"
 
 mkdir -p "$LOG_DIR"
 
@@ -32,22 +39,43 @@ emit_event() {
     fi
 }
 
-tail -F /var/log/kern.log 2>/dev/null | while read -r line; do
-    if echo "$line" | grep -q "SBX_"; then
-        ACTION=""
+parse_ulogd_line() {
+    local line="$1"
+    local action="$2"
 
-        if echo "$line" | grep -q "SBX_ALLOW"; then
-            ACTION="firewall_allow"
-        elif echo "$line" | grep -q "SBX_BLOCK"; then
-            ACTION="firewall_block"
-        else
-            continue
-        fi
+    # ulogd LOGEMU format: timestamp hostname prefix IN= OUT= SRC= DST= ... PROTO= ... DPT=
+    local dst
+    dst=$(echo "$line" | grep -oP 'DST=\K[^ ]+' || echo "unknown")
+    local dpt
+    dpt=$(echo "$line" | grep -oP 'DPT=\K[^ ]+' || echo "unknown")
+    local proto
+    proto=$(echo "$line" | grep -oP 'PROTO=\K[^ ]+' || echo "unknown")
 
-        DST=$(echo "$line" | grep -oP 'DST=\K[^ ]+' || echo "unknown")
-        DPT=$(echo "$line" | grep -oP 'DPT=\K[^ ]+' || echo "unknown")
-        PROTO=$(echo "$line" | grep -oP 'PROTO=\K[^ ]+' || echo "unknown")
+    emit_event "$action" "$dst" "$dpt" "$proto"
+}
 
-        emit_event "$ACTION" "$DST" "$DPT" "$PROTO"
+# Wait for ulogd to create log files
+for i in $(seq 1 15); do
+    if [ -f "$ALLOW_LOG" ] || [ -f "$BLOCK_LOG" ]; then
+        break
     fi
+    sleep 1
 done
+
+# Create files if they don't exist yet (tail -F needs them)
+touch "$ALLOW_LOG" "$BLOCK_LOG"
+
+# Tail both files simultaneously
+{
+    tail -F "$ALLOW_LOG" 2>/dev/null | while read -r line; do
+        [ -z "$line" ] && continue
+        parse_ulogd_line "$line" "firewall_allow"
+    done &
+
+    tail -F "$BLOCK_LOG" 2>/dev/null | while read -r line; do
+        [ -z "$line" ] && continue
+        parse_ulogd_line "$line" "firewall_block"
+    done &
+
+    wait
+}

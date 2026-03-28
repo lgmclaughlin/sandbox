@@ -116,13 +116,19 @@ def fw_logs(
 
     for entry in entries:
         ts = entry.get("timestamp", "?")
-        act = entry.get("action", "?")
-        dst = entry.get("dst", "?")
-        port = entry.get("port", "?")
-        proto = entry.get("proto", "?")
+        event_type = entry.get("event_type", "")
+        payload = entry.get("payload", {})
+        dst = payload.get("dst", "?")
+        port = payload.get("port", "?")
+        proto = payload.get("proto", "?")
 
-        color = typer.colors.GREEN if act == "allow" else typer.colors.RED
-        act_styled = typer.style(act.upper(), fg=color)
+        if "allow" in event_type:
+            act_styled = typer.style("ALLOW", fg=typer.colors.GREEN)
+        elif "block" in event_type:
+            act_styled = typer.style("BLOCK", fg=typer.colors.RED)
+        else:
+            act_styled = event_type
+
         typer.echo(f"  [{ts}] {act_styled} {dst}:{port} ({proto})")
 
 
