@@ -167,19 +167,45 @@ def _collect_files(base_dir: Path, pattern: str) -> list[Path]:
 
 def _view_sessions(sessions_dir: Path, lines: int) -> None:
     """View session metadata."""
+    # Support both old (.meta.json) and new (.jsonl) formats
     files = _collect_files(sessions_dir, "*.meta.json")
+    files.extend(_collect_files(sessions_dir, "*.jsonl"))
+    files = sorted(set(files), key=lambda f: f.stat().st_mtime, reverse=True)
+
     if not files:
         typer.echo("  No sessions found.")
         return
 
     for f in files[:lines]:
         try:
-            entries = _parse_meta_file(f)
-            start_event = next((e for e in entries if e.get("event") == "session_start"), entries[0])
-            end_event = next((e for e in entries if e.get("event") == "session_end"), None)
+            if f.suffix == ".jsonl":
+                entries = []
+                for line in f.read_text().splitlines():
+                    if line.strip():
+                        try:
+                            entries.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+            else:
+                entries = _parse_meta_file(f)
 
-            user = start_event.get("user", "?")
-            start = start_event.get("start_time", "?")
+            if not entries:
+                continue
+
+            start_event = next(
+                (e for e in entries if e.get("event_type") == "session_start"
+                 or e.get("event") == "session_start"),
+                entries[0],
+            )
+            end_event = next(
+                (e for e in entries if e.get("event_type") == "session_end"
+                 or e.get("event") == "session_end"),
+                None,
+            )
+
+            payload = start_event.get("payload", start_event)
+            user = payload.get("user", "?")
+            start = start_event.get("timestamp", payload.get("start_time", "?"))
             sid = start_event.get("session_id", f.stem)
             status = "ended" if end_event else "active"
 

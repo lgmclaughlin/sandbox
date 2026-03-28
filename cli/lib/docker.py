@@ -152,10 +152,12 @@ def _workspace_dir() -> Path:
 
 def _compose_env() -> dict[str, str]:
     """Build environment for docker compose commands."""
+    import getpass
     from cli.lib.config import DEFAULT_LOG_DIR
     env = {**os.environ, **load_env()}
     env["SANDBOX_WORKSPACE_DIR"] = str(_workspace_dir())
     env["SANDBOX_LOG_DIR"] = str(DEFAULT_LOG_DIR)
+    env.setdefault("SANDBOX_USER", getpass.getuser())
     try:
         env.setdefault("USER_ID", str(os.getuid()))
         env.setdefault("GROUP_ID", str(os.getgid()))
@@ -333,14 +335,41 @@ def get_status() -> dict[str, dict[str, str]]:
 
 
 def exec_in_sandbox(command: list[str]) -> tuple[int, str]:
-    """Execute command in sandbox container, return (exit_code, output)."""
+    """Execute command in sandbox container, return (exit_code, output).
+
+    Uses Docker SDK with tty=True to work around runc 1.4.0 CWD
+    validation on containers with shared network namespaces.
+    Logs the command to the audit volume.
+    """
     client = _get_client()
     container = _get_container(client, SANDBOX_SERVICE)
     if not container or container.status != "running":
         return 1, "Sandbox container is not running"
 
-    result = container.exec_run(command)
-    return result.exit_code, result.output.decode()
+    result = container.exec_run(command, tty=True, workdir="/workspace")
+    exit_code = result.exit_code
+    raw_output = result.output.decode()
+    # Strip TTY control characters (carriage returns)
+    output = raw_output.replace("\r\n", "\n").replace("\r", "")
+
+    try:
+        from cli.lib.logging import create_logger
+
+        sid_result = container.exec_run(
+            ["bash", "-c", "echo $SANDBOX_SESSION_ID"],
+            tty=True, workdir="/workspace",
+        )
+        session_id = sid_result.output.decode().strip().replace("\r", "") or "host"
+
+        logger = create_logger(session_id=session_id)
+        logger.emit("command", "sandbox-exec", {
+            "command": " ".join(command),
+            "exit_code": exit_code,
+        })
+    except Exception:
+        pass
+
+    return exit_code, output
 
 
 def exec_in_firewall(command: list[str]) -> tuple[int, str]:

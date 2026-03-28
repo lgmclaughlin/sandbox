@@ -29,17 +29,53 @@ class TestSessionLogs:
 
 class TestCommandLogs:
     def test_exec_produces_log(self):
-        # Run a command
         sandbox("exec", "echo", "e2e-log-test", check=True)
         time.sleep(1)
 
-        # Check logs directory
         log_dir = E2E_DATA_DIR / "logs" / "commands"
-        all_files = list(log_dir.rglob("*"))
-        log_files = [f for f in all_files if f.is_file()]
-        # Note: exec runs via docker SDK, not through entrypoint
-        # Command logging happens via entrypoint's PROMPT_COMMAND
-        # exec bypasses the shell, so this may not produce command logs
+        log_files = list(log_dir.rglob("*.jsonl"))
+        assert len(log_files) > 0, f"No command log files found. Dir contents: {list(log_dir.rglob('*'))}"
+
+        found = False
+        for f in log_files:
+            content = f.read_text()
+            if "e2e-log-test" in content:
+                found = True
+                break
+        assert found, "exec command not found in log files"
+
+    def test_exec_logs_exit_code(self):
+        sandbox("exec", "bash", "-c", "exit 42", capture_output=True)
+        time.sleep(1)
+
+        log_dir = E2E_DATA_DIR / "logs" / "commands"
+        found = False
+        for f in log_dir.rglob("*.jsonl"):
+            for line in f.read_text().splitlines():
+                if not line.strip():
+                    continue
+                entry = json.loads(line)
+                if entry.get("payload", {}).get("exit_code") == 42:
+                    found = True
+                    break
+        assert found, "Exit code 42 not found in command logs"
+
+    def test_exec_log_has_correct_source(self):
+        sandbox("exec", "echo", "source-check", check=True)
+        time.sleep(1)
+
+        log_dir = E2E_DATA_DIR / "logs" / "commands"
+        found = False
+        for f in log_dir.rglob("*.jsonl"):
+            for line in f.read_text().splitlines():
+                if not line.strip():
+                    continue
+                entry = json.loads(line)
+                if "source-check" in entry.get("payload", {}).get("command", ""):
+                    assert entry["source"] == "sandbox-exec"
+                    found = True
+                    break
+        assert found, "source-check command not found in logs"
 
     def test_special_characters_in_command(self):
         output = sandbox_output("exec", "bash", "-c",

@@ -52,6 +52,7 @@ services:
     network_mode: "service:firewall"
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
     environment:
+      - USER=${SANDBOX_USER:-sandbox}
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-project}
       - SANDBOX_LOG_FORMAT=${SANDBOX_LOG_FORMAT:-text}
       - SANDBOX_LOG_SINKS=${SANDBOX_LOG_SINKS:-file}
