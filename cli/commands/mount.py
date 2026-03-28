@@ -5,7 +5,7 @@ from typing import Optional
 import typer
 import yaml
 
-from cli.lib.config import MOUNTS_FILE, load_mounts
+import cli.lib.config as config
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -13,7 +13,7 @@ app = typer.Typer(no_args_is_help=True)
 @app.command(name="list")
 def list_mounts() -> None:
     """List configured mounts."""
-    mounts = load_mounts()
+    mounts = config.load_mounts()
     if not mounts:
         typer.echo("No mounts configured.")
         return
@@ -34,7 +34,7 @@ def add(
     mount_type: str = typer.Option("rclone", "--type", help="Mount type: rclone or sshfs"),
 ) -> None:
     """Add a mount definition."""
-    mounts = load_mounts()
+    mounts = config.load_mounts()
 
     if any(m.get("name") == name for m in mounts):
         typer.echo(typer.style(f"error: Mount '{name}' already exists.",
@@ -48,8 +48,9 @@ def add(
         "local": local,
     })
 
-    MOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    MOUNTS_FILE.write_text(yaml.dump({"mounts": mounts}, default_flow_style=False))
+    mounts_file = config.MOUNTS_FILE
+    mounts_file.parent.mkdir(parents=True, exist_ok=True)
+    mounts_file.write_text(yaml.dump({"mounts": mounts}, default_flow_style=False))
     typer.echo(f"Added mount '{name}'.")
 
 
@@ -58,7 +59,7 @@ def remove(
     name: str = typer.Argument(..., help="Mount name to remove"),
 ) -> None:
     """Remove a mount definition."""
-    mounts = load_mounts()
+    mounts = config.load_mounts()
     original_len = len(mounts)
     mounts = [m for m in mounts if m.get("name") != name]
 
@@ -67,5 +68,6 @@ def remove(
                                fg=typer.colors.RED), err=True)
         raise typer.Exit(1)
 
-    MOUNTS_FILE.write_text(yaml.dump({"mounts": mounts}, default_flow_style=False))
+    mounts_file = config.MOUNTS_FILE
+    mounts_file.write_text(yaml.dump({"mounts": mounts}, default_flow_style=False))
     typer.echo(f"Removed mount '{name}'.")

@@ -10,14 +10,12 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent.parent
-SANDBOX_CMD = shutil.which("sandbox")
-
-if not SANDBOX_CMD:
-    venv_sandbox = REPO_ROOT / ".venv" / "bin" / "sandbox"
-    if venv_sandbox.exists():
-        SANDBOX_CMD = str(venv_sandbox)
-    else:
-        SANDBOX_CMD = None
+# Prefer venv binary for testing (has latest code changes)
+venv_sandbox = REPO_ROOT / ".venv" / "bin" / "sandbox"
+if venv_sandbox.exists():
+    SANDBOX_CMD = str(venv_sandbox)
+else:
+    SANDBOX_CMD = shutil.which("sandbox")
 
 E2E_DATA_DIR = Path("/tmp/sandbox-e2e-test")
 E2E_WORKSPACE = Path("/tmp/sandbox-e2e-workspace")

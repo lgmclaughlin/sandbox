@@ -41,7 +41,15 @@ class LocalProvider(SecretsProvider):
     """
 
     def __init__(self, path: Path | None = None):
-        self.path = path or get_data_dir() / ".secrets" / "local.json"
+        if path is None:
+            from cli.lib.config import get_active_project_name
+            project = get_active_project_name()
+            if project:
+                self.path = get_data_dir() / "projects" / project / ".secrets" / "local.json"
+            else:
+                self.path = get_data_dir() / ".secrets" / "local.json"
+        else:
+            self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._data = self._load()
 

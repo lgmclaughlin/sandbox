@@ -10,9 +10,8 @@ from typing import Optional
 import typer
 import yaml
 
+import cli.lib.config as config
 from cli.lib.config import (
-    ENV_DIST_FILE,
-    ENV_FILE,
     get_active_profile,
     get_active_project_name,
     load_env,
@@ -87,15 +86,15 @@ def set(
     from dotenv import set_key as dotenv_set_key
 
     dist_env = {}
-    if ENV_DIST_FILE.exists():
+    if config.ENV_DIST_FILE.exists():
         from dotenv import dotenv_values
-        dist_env = dotenv_values(ENV_DIST_FILE)
+        dist_env = dotenv_values(config.ENV_DIST_FILE)
 
     if key not in dist_env:
         typer.echo(typer.style(f"warning: '{key}' is not a known config key.",
                                fg=typer.colors.YELLOW), err=True)
 
-    env_file = ENV_FILE
+    env_file = config.ENV_FILE
     env_file.parent.mkdir(parents=True, exist_ok=True)
 
     dotenv_set_key(str(env_file), key, value)
@@ -156,7 +155,7 @@ def edit(
     if project:
         env_file = get_data_dir() / "projects" / project / ".env"
     else:
-        env_file = ENV_FILE
+        env_file = config.ENV_FILE
 
     if not env_file.exists():
         typer.echo(typer.style(f"error: Config file not found: {env_file}",
