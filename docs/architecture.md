@@ -126,8 +126,11 @@ All log sources emit a canonical JSON schema:
 - `FileSink`: writes JSONL to audit volume, routes by event type, daily directories
 - `StdoutSink`: emits JSON to stdout for `docker logs` compatibility
 
+### Per-Layer Control
+`SANDBOX_LOG_LAYERS` controls which layers produce logs. Default: `all`. Set to a comma-separated list to enable specific layers: `sessions`, `commands`, `firewall`, `mcp`, `proxy`. Each log source (session-wrapper, firewall daemon, MCP wrapper) checks this setting before writing.
+
 ### Session Correlation
-`SANDBOX_SESSION_ID` set by `entrypoint.sh`, inherited by MCP wrapper. Every event includes the session ID for cross-layer tracing.
+`SANDBOX_SESSION_ID` set by `session-wrapper.sh`, available within the session. Every event includes the session ID for cross-layer tracing.
 
 ### OpenTelemetry Compatibility
 When `SANDBOX_LOG_OTEL_COMPAT=true`, events include an `otel` section mapping `session_id` to `trace_id` and `event_id` to `span_id`. Enables integration with OTEL-compatible platforms via log field mapping.

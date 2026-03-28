@@ -243,6 +243,7 @@ All environment variables in `.env`:
 | `SANDBOX_LOG_SINKS` | `file` | Log sinks: `file`, `stdout`, `file,stdout` |
 | `SANDBOX_LOG_OTEL_COMPAT` | `false` | OpenTelemetry field mapping |
 | `SANDBOX_LOG_MAX_PAYLOAD_BYTES` | `0` | Truncate large payloads (0=off) |
+| `SANDBOX_LOG_LAYERS` | `all` | Log layers: `all` or comma-separated (`sessions,commands,firewall,mcp,proxy`) |
 | `SANDBOX_SECRETS_PROVIDER` | `local` | Secrets provider: `local` or `env` |
 | `SANDBOX_PROXY_MODE` | `firewall-only` | `firewall-only` or `proxy` |
 | `SANDBOX_DLP_PROVIDER` | `none` | DLP provider: `none` or `webhook` |

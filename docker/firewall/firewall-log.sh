@@ -7,7 +7,14 @@
 LOG_DIR="/var/log/sandbox/firewall"
 PROJECT="${COMPOSE_PROJECT_NAME:-default}"
 LOG_SINKS="${SANDBOX_LOG_SINKS:-file}"
+LOG_LAYERS="${SANDBOX_LOG_LAYERS:-all}"
 ULOG_DIR="/var/log/sandbox/firewall"
+
+# Exit early if firewall logging is disabled
+if [ "$LOG_LAYERS" != "all" ] && ! echo ",$LOG_LAYERS," | grep -q ",firewall,"; then
+    echo "firewall-log: firewall layer disabled, exiting" >&2
+    exit 0
+fi
 
 ALLOW_LOG="$ULOG_DIR/ulogd_allow.log"
 BLOCK_LOG="$ULOG_DIR/ulogd_block.log"

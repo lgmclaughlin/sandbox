@@ -130,6 +130,79 @@ class TestEventLogger:
         assert parsed["otel"]["trace_id"] == "s1"
 
 
+class TestLayerFiltering:
+    def test_all_layers_enabled(self, tmp_path):
+        logger = EventLogger(
+            sinks=[FileSink(log_dir=tmp_path)],
+            session_id="s1",
+            enabled_layers="all",
+        )
+
+        logger.emit("session_start", "test", {"user": "test"})
+        logger.emit("command", "test", {"command": "ls"})
+        logger.emit("firewall_block", "test", {"dst": "1.2.3.4"})
+        logger.emit("mcp_request", "test", {"server": "fs"})
+
+        all_files = list(tmp_path.rglob("*.jsonl"))
+        total_lines = sum(len(f.read_text().splitlines()) for f in all_files)
+        assert total_lines == 4
+
+    def test_sessions_only(self, tmp_path):
+        logger = EventLogger(
+            sinks=[FileSink(log_dir=tmp_path)],
+            session_id="s1",
+            enabled_layers="sessions",
+        )
+
+        logger.emit("session_start", "test", {"user": "test"})
+        logger.emit("command", "test", {"command": "ls"})
+        logger.emit("firewall_block", "test", {"dst": "1.2.3.4"})
+
+        all_files = list(tmp_path.rglob("*.jsonl"))
+        total_lines = sum(len(f.read_text().splitlines()) for f in all_files)
+        assert total_lines == 1  # Only session_start
+
+    def test_commands_and_firewall(self, tmp_path):
+        logger = EventLogger(
+            sinks=[FileSink(log_dir=tmp_path)],
+            session_id="s1",
+            enabled_layers="commands,firewall",
+        )
+
+        logger.emit("session_start", "test", {"user": "test"})
+        logger.emit("command", "test", {"command": "ls"})
+        logger.emit("firewall_block", "test", {"dst": "1.2.3.4"})
+        logger.emit("mcp_request", "test", {"server": "fs"})
+
+        all_files = list(tmp_path.rglob("*.jsonl"))
+        total_lines = sum(len(f.read_text().splitlines()) for f in all_files)
+        assert total_lines == 2  # command + firewall_block
+
+    def test_disabled_layer_produces_no_files(self, tmp_path):
+        logger = EventLogger(
+            sinks=[FileSink(log_dir=tmp_path)],
+            session_id="s1",
+            enabled_layers="sessions",
+        )
+
+        logger.emit("firewall_block", "test", {"dst": "1.2.3.4"})
+        logger.emit("mcp_request", "test", {"server": "fs"})
+
+        firewall_files = list((tmp_path / "firewall").rglob("*.jsonl")) if (tmp_path / "firewall").exists() else []
+        mcp_files = list((tmp_path / "mcp").rglob("*.jsonl")) if (tmp_path / "mcp").exists() else []
+        assert len(firewall_files) == 0
+        assert len(mcp_files) == 0
+
+    def test_create_logger_reads_layers(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("cli.lib.logging.load_env", lambda: {
+            "SANDBOX_LOG_LAYERS": "sessions,commands",
+        })
+        monkeypatch.setattr("cli.lib.logging.get_active_project_name", lambda: "")
+
+        logger = create_logger(session_id="s1", log_dir=tmp_path)
+        assert logger.enabled_layers == "sessions,commands"
+
+
 class TestCreateLogger:
     def test_creates_with_defaults(self, tmp_path, monkeypatch):
         monkeypatch.setattr("cli.lib.logging.load_env", lambda: {})

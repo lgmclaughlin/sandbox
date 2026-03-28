@@ -9,6 +9,21 @@ from pathlib import Path
 
 from cli.lib.config import get_active_project_name, get_log_dir, load_env
 
+# Map event types to their layer name for filtering
+EVENT_TYPE_LAYERS = {
+    "session_start": "sessions",
+    "session_end": "sessions",
+    "command": "commands",
+    "mcp_request": "mcp",
+    "mcp_response": "mcp",
+    "mcp_lifecycle": "mcp",
+    "mcp_validation_error": "mcp",
+    "firewall_allow": "firewall",
+    "firewall_block": "firewall",
+    "proxy_request": "proxy",
+    "system": "sessions",
+}
+
 EVENT_TYPES = {
     "session_start",
     "session_end",
@@ -121,15 +136,27 @@ class EventLogger:
         project: str = "",
         otel_compat: bool = False,
         max_payload_bytes: int = 0,
+        enabled_layers: str = "all",
     ):
         self.sinks = sinks or []
         self.session_id = session_id
         self.project = project
         self.otel_compat = otel_compat
         self.max_payload_bytes = max_payload_bytes
+        self.enabled_layers = enabled_layers
+
+    def _is_layer_enabled(self, event_type: str) -> bool:
+        """Check if the layer for this event type is enabled."""
+        if self.enabled_layers == "all":
+            return True
+        enabled = {l.strip() for l in self.enabled_layers.split(",")}
+        layer = EVENT_TYPE_LAYERS.get(event_type, "system")
+        return layer in enabled
 
     def emit(self, event_type: str, source: str, payload: dict) -> None:
-        """Emit an event through all sinks."""
+        """Emit an event through all sinks if the layer is enabled."""
+        if not self._is_layer_enabled(event_type):
+            return
         if self.max_payload_bytes > 0:
             payload = self._truncate_payload(payload)
 
@@ -176,6 +203,7 @@ def create_logger(
     sink_names = env.get("SANDBOX_LOG_SINKS", "file")
     otel_compat = env.get("SANDBOX_LOG_OTEL_COMPAT", "").lower() == "true"
     max_payload = int(env.get("SANDBOX_LOG_MAX_PAYLOAD_BYTES", "0"))
+    enabled_layers = env.get("SANDBOX_LOG_LAYERS", "all")
     project = get_active_project_name() or "default"
 
     sinks: list[Sink] = []
@@ -195,4 +223,5 @@ def create_logger(
         project=project,
         otel_compat=otel_compat,
         max_payload_bytes=max_payload,
+        enabled_layers=enabled_layers,
     )

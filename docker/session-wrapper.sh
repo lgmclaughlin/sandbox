@@ -8,6 +8,13 @@ LOG_DIR="/var/log/sandbox"
 LOG_FORMAT="${SANDBOX_LOG_FORMAT:-text}"
 PROJECT="${COMPOSE_PROJECT_NAME:-default}"
 LOG_SINKS="${SANDBOX_LOG_SINKS:-file}"
+LOG_LAYERS="${SANDBOX_LOG_LAYERS:-all}"
+
+_layer_enabled() {
+    [ "$LOG_LAYERS" = "all" ] && return 0
+    echo ",$LOG_LAYERS," | grep -q ",$1," && return 0
+    return 1
+}
 
 TODAY=$(date +%Y-%m-%d)
 SESSION_DIR="$LOG_DIR/sessions/$TODAY"
@@ -43,36 +50,42 @@ _sandbox_emit() {
 
 # --- Session start ---
 
-_sandbox_emit "session_start" "session" "$(printf '{"user":"%s","hostname":"%s","platform":"%s","shell":"%s","log_format":"%s"}' \
-    "${USER:-unknown}" "${HOSTNAME:-unknown}" "$(uname -s)" "$SHELL" "$LOG_FORMAT")"
+if _layer_enabled sessions; then
+    _sandbox_emit "session_start" "session" "$(printf '{"user":"%s","hostname":"%s","platform":"%s","shell":"%s","log_format":"%s"}' \
+        "${USER:-unknown}" "${HOSTNAME:-unknown}" "$(uname -s)" "$SHELL" "$LOG_FORMAT")"
+fi
 
 # --- Exit trap (fires when user exits bash) ---
 
 _sandbox_on_exit() {
-    _sandbox_emit "session_end" "session" \
-        "$(printf '{"end_time":"%s"}' "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+    if _layer_enabled sessions; then
+        _sandbox_emit "session_end" "session" \
+            "$(printf '{"end_time":"%s"}' "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+    fi
     history -w 2>/dev/null || true
 }
 trap _sandbox_on_exit EXIT
 
 # --- Command logging ---
 
-if [ "$LOG_FORMAT" = "json" ]; then
-    _sandbox_log_cmd() {
-        local last_exit=$?
-        local cmd
-        cmd=$(HISTTIMEFORMAT= history 1 | sed 's/^[ ]*[0-9]*[ ]*//')
-        [ -z "$cmd" ] && return
-        local escaped_cmd
-        escaped_cmd=$(echo "$cmd" | sed 's/"/\\"/g')
-        _sandbox_emit "command" "command" \
-            "$(printf '{"command":"%s","exit_code":%d,"cwd":"%s"}' "$escaped_cmd" "$last_exit" "$PWD")"
-    }
-    PROMPT_COMMAND='_sandbox_log_cmd'
-else
-    HISTFILE="$COMMAND_DIR/${SESSION_ID}.history"
-    HISTTIMEFORMAT="%F %T "
-    PROMPT_COMMAND='history -a'
+if _layer_enabled commands; then
+    if [ "$LOG_FORMAT" = "json" ]; then
+        _sandbox_log_cmd() {
+            local last_exit=$?
+            local cmd
+            cmd=$(HISTTIMEFORMAT= history 1 | sed 's/^[ ]*[0-9]*[ ]*//')
+            [ -z "$cmd" ] && return
+            local escaped_cmd
+            escaped_cmd=$(echo "$cmd" | sed 's/"/\\"/g')
+            _sandbox_emit "command" "command" \
+                "$(printf '{"command":"%s","exit_code":%d,"cwd":"%s"}' "$escaped_cmd" "$last_exit" "$PWD")"
+        }
+        PROMPT_COMMAND='_sandbox_log_cmd'
+    else
+        HISTFILE="$COMMAND_DIR/${SESSION_ID}.history"
+        HISTTIMEFORMAT="%F %T "
+        PROMPT_COMMAND='history -a'
+    fi
 fi
 
 # --- Session recording ---

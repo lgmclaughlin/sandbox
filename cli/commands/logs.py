@@ -37,6 +37,39 @@ def summary() -> None:
     log_summary()
 
 
+VALID_LAYERS = {"sessions", "commands", "firewall", "mcp", "proxy"}
+
+
+@app.command(name="filter")
+def filter_cmd(
+    layers: Optional[str] = typer.Argument(None, help="Comma-separated layers (sessions,commands,firewall,mcp,proxy) or 'all'"),
+) -> None:
+    """Set which log layers are active, or show the current filter."""
+    env = load_env()
+
+    if layers is None:
+        current = env.get("SANDBOX_LOG_LAYERS", "all")
+        typer.echo(f"Current log filter: {current}")
+        typer.echo(f"Available layers: {', '.join(sorted(VALID_LAYERS))}")
+        return
+
+    if layers != "all":
+        requested = {l.strip() for l in layers.split(",")}
+        invalid = requested - VALID_LAYERS
+        if invalid:
+            typer.echo(typer.style(f"error: Unknown layers: {', '.join(invalid)}",
+                                   fg=typer.colors.RED), err=True)
+            typer.echo(f"Available: {', '.join(sorted(VALID_LAYERS))}")
+            raise typer.Exit(1)
+
+    from dotenv import set_key as dotenv_set_key
+    from cli.lib.config import ENV_FILE
+    dotenv_set_key(str(ENV_FILE), "SANDBOX_LOG_LAYERS", layers)
+    typer.echo(f"Log filter set to: {layers}")
+    typer.echo(typer.style("  Restart sandbox for changes to take effect.",
+                           fg=typer.colors.YELLOW))
+
+
 @app.command()
 def export(
     output: str = typer.Option("sandbox-logs.json", "--output", "-o", help="Output file path"),

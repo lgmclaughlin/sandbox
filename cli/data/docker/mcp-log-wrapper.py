@@ -22,9 +22,11 @@ LOG_DIR = Path("/var/log/sandbox/mcp")
 SESSION_ID = os.environ.get("SANDBOX_SESSION_ID", "unknown")
 PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "default")
 LOG_SINKS = os.environ.get("SANDBOX_LOG_SINKS", "file")
+LOG_LAYERS = os.environ.get("SANDBOX_LOG_LAYERS", "all")
 MAX_PAYLOAD = int(os.environ.get("SANDBOX_LOG_MAX_PAYLOAD_BYTES", "0"))
 OTEL_COMPAT = os.environ.get("SANDBOX_LOG_OTEL_COMPAT", "").lower() == "true"
 MCP_ENFORCE = os.environ.get("MCP_ENFORCE", "").lower() == "true"
+MCP_LOGGING_ENABLED = LOG_LAYERS == "all" or "mcp" in LOG_LAYERS.split(",")
 MCP_PERMISSIONS = {}
 
 if os.environ.get("MCP_PERMISSIONS"):
@@ -50,6 +52,8 @@ def get_log_file() -> Path:
 
 
 def emit_event(event_type: str, server_name: str, payload: dict) -> None:
+    if not MCP_LOGGING_ENABLED:
+        return
     try:
         if MAX_PAYLOAD > 0:
             for key, value in list(payload.items()):
