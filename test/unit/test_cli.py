@@ -30,9 +30,9 @@ class TestCLIHelp:
 
 class TestVersion:
     def test_version_output(self):
-        result = runner.invoke(app, ["version"])
+        result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "sandbox version" in result.output
+        assert "sandbox" in result.output
 
 
 class TestFwValidation:

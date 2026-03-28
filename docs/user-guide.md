@@ -43,6 +43,24 @@ pip install -e ".[dev]"
 
 The `sandbox` command is available inside the venv. Changes to source code are reflected immediately.
 
+### Updating
+
+**pipx install:**
+```bash
+git pull
+pipx upgrade sandbox
+sandbox rebuild
+```
+
+**Development install:**
+```bash
+git pull
+pip install -e ".[dev]"
+sandbox rebuild
+```
+
+`sandbox rebuild` rebuilds the Docker container images. Only needed when Dockerfile or container scripts change.
+
 ## Quick Start
 
 ```bash

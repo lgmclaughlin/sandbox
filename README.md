@@ -142,6 +142,19 @@ See the [user guide](docs/user-guide.md) for the full configuration reference.
 
 > Sandbox produces structured execution logs. It does not replace observability platforms (Datadog, OpenTelemetry, etc.) but integrates with them via JSON log export and OTEL-compatible fields.
 
+## Updating
+
+```bash
+# pipx install
+git pull && pipx upgrade sandbox
+
+# Development install
+git pull && pip install -e ".[dev]"
+
+# Rebuild containers after updating
+sandbox rebuild
+```
+
 ## Development
 
 ```bash
