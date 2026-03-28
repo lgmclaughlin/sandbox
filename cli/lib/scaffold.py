@@ -32,6 +32,7 @@ SCAFFOLD_FILES = {
     "docker/Dockerfile": "docker/Dockerfile",
     "docker/docker-compose.yml": "docker/docker-compose.yml",
     "docker/entrypoint.sh": "docker/entrypoint.sh",
+    "docker/session-wrapper.sh": "docker/session-wrapper.sh",
     "docker/mcp-log-wrapper.py": "docker/mcp-log-wrapper.py",
     "docker/firewall/Dockerfile_firewall": "docker/firewall/Dockerfile_firewall",
     "docker/firewall/firewall-init.sh": "docker/firewall/firewall-init.sh",

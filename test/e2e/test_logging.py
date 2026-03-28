@@ -12,19 +12,21 @@ class TestSessionLogs:
         log_dir = E2E_DATA_DIR / "logs" / "sessions"
         assert log_dir.exists(), f"Session log directory not found: {log_dir}"
 
-    def test_session_metadata_written(self):
-        result = sandbox("exec", "bash", "-c",
-                         "ls /var/log/sandbox/sessions/",
-                         capture_output=True, text=True)
-        # Should have date directories
-        assert result.stdout.strip() != "", "No session log directories found in container"
+    def test_session_created_by_exec(self):
+        # Sessions are created by session-wrapper.sh on attach, not by entrypoint.
+        # Exec commands log to commands/ via host-side logger.
+        # Verify the log directory structure exists.
+        log_dir = E2E_DATA_DIR / "logs"
+        assert (log_dir / "sessions").exists()
+        assert (log_dir / "commands").exists()
 
-    def test_session_metadata_has_json(self):
-        log_dir = E2E_DATA_DIR / "logs" / "sessions"
+    def test_exec_creates_command_log(self):
+        sandbox("exec", "echo", "session-test", check=True)
+        time.sleep(1)
+        log_dir = E2E_DATA_DIR / "logs" / "commands"
         jsonl_files = list(log_dir.rglob("*.jsonl"))
-        meta_files = list(log_dir.rglob("*.meta.json"))
-        assert len(jsonl_files) > 0 or len(meta_files) > 0, \
-            f"No session log files found. Contents: {list(log_dir.rglob('*'))}"
+        assert len(jsonl_files) > 0, \
+            f"No command log files found after exec. Contents: {list(log_dir.rglob('*'))}"
 
 
 class TestCommandLogs:

@@ -65,9 +65,9 @@ def e2e_environment():
     os.environ["SANDBOX_DATA_DIR"] = str(E2E_DATA_DIR)
     sandbox("config", "show", "--path", check=True)  # triggers scaffolding
 
-    # Start containers
+    # Start containers (may build images on first run)
     result = sandbox("start", "--no-attach", str(E2E_WORKSPACE),
-                     capture_output=True, text=True)
+                     capture_output=True, text=True, timeout=180)
     if result.returncode != 0:
         print(f"Failed to start sandbox:\n{result.stdout}\n{result.stderr}")
         pytest.skip("Failed to start sandbox containers")

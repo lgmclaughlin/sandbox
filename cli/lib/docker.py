@@ -289,7 +289,10 @@ def stop_containers() -> None:
 
 
 def rebuild_containers() -> None:
-    """Rebuild images and restart."""
+    """Rebuild images and restart. Re-scaffolds to pick up new files."""
+    from cli.lib.scaffold import scaffold
+    scaffold(force=True)
+
     env = _compose_env()
     base = _compose_cmd()
     stop_containers()
@@ -298,15 +301,18 @@ def rebuild_containers() -> None:
 
 
 def attach_to_sandbox() -> None:
-    """Attach to sandbox container with an interactive shell."""
+    """Attach to sandbox container via session-wrapper.
+
+    Each attach creates an independent session with its own ID,
+    logging, command history, and exit trap.
+    """
     env = _compose_env()
     base = _compose_cmd()
-    cmd = [*base, "exec", SANDBOX_SERVICE, "bash", "-l"]
+    cmd = [*base, "exec", SANDBOX_SERVICE, "/usr/local/bin/session-wrapper.sh"]
 
     if hasattr(os, "execvpe"):
         os.execvpe(base[0], cmd, env)
     else:
-        # Windows: no execvpe, use subprocess and forward exit code
         result = subprocess.run(cmd, env=env)
         sys.exit(result.returncode)
 

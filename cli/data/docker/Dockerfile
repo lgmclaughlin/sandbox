@@ -43,6 +43,9 @@ ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+COPY docker/session-wrapper.sh /usr/local/bin/session-wrapper.sh
+RUN chmod +x /usr/local/bin/session-wrapper.sh
+
 COPY docker/mcp-log-wrapper.py /usr/local/bin/mcp-log-wrapper
 RUN chmod +x /usr/local/bin/mcp-log-wrapper
 
