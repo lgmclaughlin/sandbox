@@ -190,3 +190,17 @@ def attach() -> None:
         raise typer.Exit(1)
 
     attach_to_sandbox()
+
+
+def exec_cmd(command: list[str]) -> None:
+    """Execute a command inside the sandbox container."""
+    if not is_running("sandbox"):
+        typer.echo(typer.style("error: Sandbox is not running. Run 'sandbox start' first.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    from cli.lib.docker import exec_in_sandbox
+    exit_code, output = exec_in_sandbox(command)
+    if output:
+        typer.echo(output, nl=False)
+    raise typer.Exit(exit_code)

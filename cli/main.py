@@ -11,7 +11,7 @@ from cli import __version__
 from cli.commands import config_cmd, firewall, inspect, lifecycle, logs, mcp, mount, proxy, secrets, tools
 
 COMMAND_ORDER = [
-    "start", "stop", "restart", "rebuild", "status", "attach",
+    "start", "stop", "restart", "rebuild", "status", "attach", "exec",
     "init", "projects",
     "tool", "mcp", "secrets", "fw", "proxy", "mount", "inspect", "config", "logs",
     "check", "info",
@@ -120,6 +120,16 @@ def status() -> None:
 def attach() -> None:
     """Attach to the sandbox shell."""
     lifecycle.attach()
+
+
+@app.command(rich_help_panel=LIFECYCLE, context_settings={"allow_extra_args": True, "allow_interspersed_args": False})
+def exec(ctx: typer.Context) -> None:
+    """Execute a command inside the sandbox container."""
+    if not ctx.args:
+        typer.echo(typer.style("error: No command provided. Usage: sandbox exec <command>",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+    lifecycle.exec_cmd(ctx.args)
 
 
 @app.command(rich_help_panel=PROJECTS)

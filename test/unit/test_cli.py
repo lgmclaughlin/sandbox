@@ -60,6 +60,18 @@ class TestToolValidation:
         assert result.exit_code != 0
 
 
+class TestExec:
+    def test_exec_no_command(self):
+        result = runner.invoke(app, ["exec"])
+        assert result.exit_code != 0
+        assert "No command" in result.output
+
+    def test_exec_help(self):
+        result = runner.invoke(app, ["exec", "--help"])
+        assert result.exit_code == 0
+        assert "Execute" in result.output
+
+
 class TestFwLs:
     def test_lists_domains(self):
         result = runner.invoke(app, ["fw", "ls"])

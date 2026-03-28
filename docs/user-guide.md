@@ -93,6 +93,7 @@ Override with `SANDBOX_DATA_DIR` environment variable. Find the location anytime
 | `sandbox rebuild` | Rebuild images and restart |
 | `sandbox status` | Show container and tool status |
 | `sandbox attach` | Attach to running sandbox shell |
+| `sandbox exec <command>` | Run a command inside the container |
 
 Options for `start`:
 - `--no-attach` to start without attaching
