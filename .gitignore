@@ -35,6 +35,7 @@ env/
 htmlcov/
 .tox/
 .nox/
+demo/*
 
 # IDEs
 .idea/
@@ -54,10 +55,10 @@ htmlcov/
 # Generated compose override
 docker/docker-compose.override.yml
 
-# Projects (user-created, not committed)
+# Projects
 projects/
 
-# Logs (audit logs are in ./logs/ which we want to ignore locally)
+# Logs
 logs/
 
 # OS
