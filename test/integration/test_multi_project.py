@@ -13,6 +13,7 @@ from cli.lib.project import (
     get_project_dir,
     init_project,
     list_projects,
+    remove_project,
 )
 
 
@@ -88,6 +89,66 @@ class TestProjectList:
 
     def test_empty(self, mp_setup):
         assert list_projects() == []
+
+
+class TestProjectRemove:
+    def test_remove_existing(self, mp_setup):
+        init_project("to-remove")
+        assert get_project_dir("to-remove").exists()
+
+        remove_project("to-remove")
+        assert not get_project_dir("to-remove").exists()
+
+    def test_remove_nonexistent(self, mp_setup):
+        with pytest.raises(ValueError, match="not found"):
+            remove_project("ghost")
+
+    def test_remove_preserves_other_projects(self, mp_setup):
+        init_project("keep")
+        init_project("delete")
+
+        remove_project("delete")
+
+        assert get_project_dir("keep").exists()
+        assert not get_project_dir("delete").exists()
+        names = [p["name"] for p in list_projects()]
+        assert "keep" in names
+        assert "delete" not in names
+
+
+class TestProjectNameValidation:
+    def test_rejects_path_traversal(self, mp_setup):
+        with pytest.raises(ValueError, match="Invalid project name"):
+            init_project("../../../nonexistent-safe-test-path")
+
+    def test_rejects_slashes(self, mp_setup):
+        with pytest.raises(ValueError, match="Invalid project name"):
+            init_project("foo/bar")
+
+    def test_rejects_backslashes(self, mp_setup):
+        with pytest.raises(ValueError, match="Invalid project name"):
+            init_project("foo\\bar")
+
+    def test_rejects_dot_prefix(self, mp_setup):
+        with pytest.raises(ValueError, match="Invalid project name"):
+            init_project(".hidden")
+
+    def test_rejects_double_dots(self, mp_setup):
+        with pytest.raises(ValueError, match="Invalid project name"):
+            init_project("foo..bar")
+
+    def test_rejects_empty(self, mp_setup):
+        with pytest.raises(ValueError, match="Invalid project name"):
+            init_project("")
+
+    def test_remove_rejects_traversal(self, mp_setup):
+        with pytest.raises(ValueError, match="Invalid project name"):
+            remove_project("../../../nonexistent-safe-test-path")
+
+    def test_allows_hyphens_and_underscores(self, mp_setup):
+        init_project("my-project_v2")
+        assert get_project_dir("my-project_v2").exists()
+        remove_project("my-project_v2")
 
 
 class TestProjectIsolation:

@@ -106,6 +106,7 @@ Options for `start`:
 |---------|-------------|
 | `sandbox init <name>` | Create a new project |
 | `sandbox projects` | List all projects |
+| `sandbox remove-project <name>` | Remove a project and its config/logs |
 
 Use `--project <name>` or `-p <name>` on any command to scope it to a project.
 

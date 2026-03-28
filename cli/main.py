@@ -12,7 +12,7 @@ from cli.commands import config_cmd, firewall, inspect, lifecycle, logs, mcp, mo
 
 COMMAND_ORDER = [
     "start", "stop", "restart", "rebuild", "status", "attach", "exec",
-    "init", "projects",
+    "init", "projects", "remove-project",
     "tool", "mcp", "secrets", "fw", "proxy", "mount", "inspect", "config", "logs",
     "check", "info",
 ]
@@ -146,6 +146,36 @@ def init(
     except ValueError as e:
         typer.echo(typer.style(f"error: {e}", fg=typer.colors.RED), err=True)
         raise typer.Exit(1)
+
+
+@app.command(name="remove-project", rich_help_panel=PROJECTS)
+def remove_project(
+    name: str = typer.Argument(..., help="Project name to remove"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+) -> None:
+    """Remove a project and its configuration."""
+    from cli.lib.project import get_project_dir, remove_project as _remove_project
+    project_dir = get_project_dir(name)
+    if not project_dir.exists():
+        typer.echo(typer.style(f"error: Project '{name}' not found.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    if not yes:
+        typer.confirm(f"Remove project '{name}' and all its config/logs?", abort=True)
+
+    # Stop containers if running
+    from cli.lib.docker import is_running
+    from cli.lib.config import set_active_project
+    set_active_project(name)
+    if is_running("sandbox") or is_running("firewall"):
+        typer.echo(f"Stopping {name} containers...")
+        from cli.lib.docker import stop_containers
+        stop_containers()
+    set_active_project("")
+
+    _remove_project(name)
+    typer.echo(typer.style(f"Project '{name}' removed.", fg=typer.colors.GREEN))
 
 
 @app.command(name="projects", rich_help_panel=PROJECTS)

@@ -90,6 +90,7 @@ def get_project_paths(name: str = "") -> dict[str, Path]:
 
 def init_project(name: str, workspace: str | None = None) -> Path:
     """Initialize a new project directory with scaffolding."""
+    _validate_project_name(name)
     data_dir = get_data_dir()
     project_dir = _projects_dir() / name
 
@@ -131,3 +132,23 @@ def init_project(name: str, workspace: str | None = None) -> Path:
             shutil.copy2(mcp_file, project_dir / "config" / "mcp" / mcp_file.name)
 
     return project_dir
+
+
+def _validate_project_name(name: str) -> None:
+    """Validate project name is safe (no path traversal)."""
+    if not name or "/" in name or "\\" in name or name.startswith(".") or ".." in name:
+        raise ValueError(f"Invalid project name: '{name}'")
+
+
+def remove_project(name: str) -> None:
+    """Remove a project directory and all its contents."""
+    _validate_project_name(name)
+    project_dir = _projects_dir() / name
+
+    # Safety check: resolved path must be inside projects directory
+    if not project_dir.resolve().is_relative_to(_projects_dir().resolve()):
+        raise ValueError(f"Invalid project path: '{name}'")
+
+    if not project_dir.exists():
+        raise ValueError(f"Project '{name}' not found")
+    shutil.rmtree(project_dir)
