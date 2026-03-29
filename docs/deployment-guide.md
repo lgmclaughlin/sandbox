@@ -244,6 +244,28 @@ If the **firewall container** is compromised:
 
 The sandbox cannot escalate to the firewall. They are separate containers with no shared access beyond the network namespace.
 
+### Security considerations
+
+**Docker vs. VM isolation:** Docker containers share the host kernel. VM-based isolation (like cloud sandbox services) provides a hardware boundary. Container escapes are rare (~1 known CVE per year) and require exploiting the container runtime (runc). Our mitigations (non-root, no capabilities, no-new-privileges) make exploitation significantly harder, but a determined attacker with a zero-day could theoretically reach the host.
+
+**When Docker isolation is appropriate:**
+- Running AI tools you chose and trust (Claude Code, Aider)
+- Working on your own code or your organization's code
+- The threat is unintended side effects, not active attacks
+
+**When VM isolation is better:**
+- Running untrusted code from unknown sources
+- Public code execution platforms
+- High-security environments where the host machine contains sensitive data beyond the workspace
+
+**Firewall container risk:** The firewall has `NET_ADMIN` and `NET_RAW` capabilities but has no attack surface. The sandbox shares its network namespace but not its filesystem, process space, or capabilities. A process in the sandbox cannot execute commands in the firewall, modify its rules, or access its capabilities. The only realistic attack path requires a container escape to the host first, at which point the firewall is irrelevant.
+
+**What we prevent vs. what we don't:**
+- Prevent: unauthorized network access, unlogged operations, file access outside workspace
+- Prevent: accidental data exfiltration to unapproved domains
+- Don't prevent: container runtime zero-day exploits (keep Docker and runc updated)
+- Don't prevent: a compromised host from accessing the container
+
 ## Compliance Checklist
 
 | Requirement | How Sandbox Addresses It |
