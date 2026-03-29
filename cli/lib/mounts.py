@@ -3,18 +3,25 @@
 import subprocess
 from pathlib import Path
 
-from cli.lib.config import load_mounts
+import cli.lib.config as config
 from cli.lib.paths import get_data_dir
 from cli.lib.platform import IS_WINDOWS, check_rclone, check_sshfs
 
 
-def setup_mounts() -> list[dict]:
-    """Set up all configured mounts. Returns list of mount results."""
-    mounts = load_mounts()
+def setup_mounts(workspace: Path | None = None) -> list[dict]:
+    """Set up all configured mounts. Returns list of mount results.
+
+    Relative local paths are resolved against the workspace directory.
+    If any mount fails, successfully mounted paths are rolled back.
+    If a path is already mounted by another process, refuses with an error.
+    """
+    mounts = config.load_mounts()
     if not mounts:
         return []
 
     results = []
+    mounted_paths = []  # Track successful mounts for rollback
+
     for mount in mounts:
         name = mount.get("name", "unnamed")
         mount_type = mount.get("type", "rclone")
@@ -24,11 +31,30 @@ def setup_mounts() -> list[dict]:
 
         if not remote or not local:
             results.append({"name": name, "ok": False, "error": "Missing remote or local path"})
-            continue
+            _rollback_mounts(mounted_paths)
+            return results
 
         local_path = Path(local)
         if not local_path.is_absolute():
-            local_path = get_data_dir() / local_path
+            if workspace:
+                local_path = workspace / local_path
+            else:
+                local_path = Path.cwd() / local_path
+
+        # If already mounted, check if it's the same remote (same project restarting)
+        # or a different remote (conflict from another project)
+        if _is_mounted(local_path):
+            existing_source = _get_mount_source(local_path)
+            if existing_source and remote.split(":")[0] in existing_source:
+                # Same remote, reuse the mount
+                results.append({"name": name, "ok": True, "error": ""})
+                continue
+            else:
+                results.append({"name": name, "ok": False,
+                                "error": f"Already mounted at {local_path} by another source ({existing_source}). "
+                                         f"Run 'sandbox mount clear {local_path}' to unmount."})
+                _rollback_mounts(mounted_paths)
+                return results
 
         local_path.mkdir(parents=True, exist_ok=True)
 
@@ -39,9 +65,34 @@ def setup_mounts() -> list[dict]:
         else:
             ok, error = False, f"Unknown mount type: {mount_type}"
 
-        results.append({"name": name, "ok": ok, "error": error})
+        if ok:
+            mounted_paths.append(local_path)
+        else:
+            results.append({"name": name, "ok": False, "error": error})
+            _rollback_mounts(mounted_paths)
+            return results
+
+        results.append({"name": name, "ok": True, "error": ""})
 
     return results
+
+
+def _rollback_mounts(paths: list[Path]) -> None:
+    """Unmount any successfully mounted paths during a failed setup."""
+    for path in paths:
+        _unmount(path)
+
+
+def _get_mount_source(path: Path) -> str:
+    """Get the source of a mount at the given path from the system mount table."""
+    try:
+        result = subprocess.run(
+            ["findmnt", "-n", "-o", "SOURCE", str(path)],
+            capture_output=True, text=True, timeout=5,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return ""
 
 
 def _is_mounted(path: Path) -> bool:
@@ -67,7 +118,8 @@ def _mount_rclone(remote: str, local: Path, options: dict) -> tuple[bool, str]:
     if _is_mounted(local):
         return True, ""
 
-    cmd = ["rclone", "mount", remote, str(local), "--daemon"]
+    cmd = ["rclone", "mount", remote, str(local), "--daemon",
+           "--vfs-cache-mode", "writes"]
 
     for key, value in options.items():
         if isinstance(value, bool):
@@ -77,10 +129,33 @@ def _mount_rclone(remote: str, local: Path, options: dict) -> tuple[bool, str]:
             cmd.extend([f"--{key}", str(value)])
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode != 0:
-            return False, result.stderr.strip()
-        return True, ""
+        # Try with daemon (works if no passphrase or agent is loaded)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            return True, ""
+
+        # If key passphrase is the issue, prompt and retry
+        stderr = result.stderr or ""
+        if "passphrase protected" in stderr or "private key" in stderr:
+            import getpass
+            mount_name = local.name or remote.split(":")[0]
+            passphrase = getpass.getpass(f"  Passphrase for {mount_name} ({remote.split(':')[0]}): ")
+
+            # rclone expects obscured passwords, not plaintext
+            obscured = subprocess.run(
+                ["rclone", "obscure", passphrase],
+                capture_output=True, text=True,
+            )
+            if obscured.returncode != 0:
+                return False, "Failed to obscure passphrase"
+
+            cmd_with_pass = [*cmd, "--sftp-key-file-pass", obscured.stdout.strip()]
+            result = subprocess.run(cmd_with_pass, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                return True, ""
+            return False, result.stderr.strip() or f"Mount failed (exit {result.returncode})"
+
+        return False, stderr.strip() or f"rclone mount failed (exit {result.returncode})"
     except subprocess.TimeoutExpired:
         return False, "Mount timed out"
     except FileNotFoundError:
@@ -124,7 +199,7 @@ def _mount_sshfs(remote: str, local: Path, options: dict) -> tuple[bool, str]:
 
 def unmount_all() -> None:
     """Unmount all configured mounts."""
-    mounts = load_mounts()
+    mounts = config.load_mounts()
     for mount in mounts:
         local = mount.get("local", "")
         if not local:
@@ -132,7 +207,7 @@ def unmount_all() -> None:
 
         local_path = Path(local)
         if not local_path.is_absolute():
-            local_path = get_data_dir() / local_path
+            local_path = Path.cwd() / local_path
 
         if _is_mounted(local_path):
             _unmount(local_path)
@@ -147,4 +222,7 @@ def _unmount(path: Path) -> None:
     elif IS_MACOS:
         subprocess.run(["umount", str(path)], capture_output=True)
     else:
-        subprocess.run(["fusermount", "-u", "-z", str(path)], capture_output=True)
+        # Try fusermount3 first (Arch, newer distros), fall back to fusermount
+        import shutil
+        fuse_cmd = "fusermount3" if shutil.which("fusermount3") else "fusermount"
+        subprocess.run([fuse_cmd, "-u", "-z", str(path)], capture_output=True)

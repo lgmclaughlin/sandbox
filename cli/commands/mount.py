@@ -71,3 +71,48 @@ def remove(
     mounts_file = config.MOUNTS_FILE
     mounts_file.write_text(yaml.dump({"mounts": mounts}, default_flow_style=False))
     typer.echo(f"Removed mount '{name}'.")
+
+
+@app.command()
+def clear(
+    path: Optional[str] = typer.Argument(None, help="Specific directory to unmount (default: all configured mounts)"),
+) -> None:
+    """Unmount active FUSE mounts."""
+    from cli.lib.mounts import _is_mounted, _unmount
+
+    if path is not None:
+        local_path = Path(path)
+        if not local_path.is_absolute():
+            local_path = Path.cwd() / local_path
+
+        if not _is_mounted(local_path):
+            typer.echo(typer.style(f"error: {local_path} is not mounted.",
+                                   fg=typer.colors.RED), err=True)
+            raise typer.Exit(1)
+
+        _unmount(local_path)
+        typer.echo(f"Unmounted {local_path}.")
+        return
+
+    mounts = config.load_mounts()
+    if not mounts:
+        typer.echo("No mounts configured.")
+        return
+
+    cleared = 0
+    for mount in mounts:
+        local = mount.get("local", "")
+        if not local:
+            continue
+        local_path = Path(local)
+        if not local_path.is_absolute():
+            local_path = Path.cwd() / local_path
+        if _is_mounted(local_path):
+            _unmount(local_path)
+            typer.echo(f"  Unmounted {local_path}")
+            cleared += 1
+
+    if cleared == 0:
+        typer.echo("No active mounts found.")
+    else:
+        typer.echo(f"Cleared {cleared} mount(s).")

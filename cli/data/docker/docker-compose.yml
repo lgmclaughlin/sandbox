@@ -63,7 +63,11 @@ services:
       - SANDBOX_ENFORCE_MCP_PERMISSIONS=${SANDBOX_ENFORCE_MCP_PERMISSIONS:-false}
       - SANDBOX_SESSION_ID
     volumes:
-      - ${SANDBOX_WORKSPACE_DIR:-../workspace}:/workspace:rw,delegated
+      - type: bind
+        source: ${SANDBOX_WORKSPACE_DIR:-../workspace}
+        target: /workspace
+        bind:
+          propagation: shared
       - ${SANDBOX_LOG_DIR:-../logs}:/var/log/sandbox:rw
     security_opt:
       - no-new-privileges:true

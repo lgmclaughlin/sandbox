@@ -155,6 +155,20 @@ git pull && pip install -e ".[dev]"
 sandbox rebuild
 ```
 
+## Platform Status
+
+| Feature | Linux | macOS | Windows |
+|---------|-------|-------|---------|
+| Core CLI | Tested | Expected to work | Expected to work |
+| Containers | Tested | Docker Desktop | Docker Desktop |
+| Firewall | Tested | Tested (in container) | Tested (in container) |
+| Session logging | Tested | Expected to work | Expected to work |
+| Mount system (rclone/sshfs) | Tested | Needs macFUSE testing | Limited (WinFsp) |
+| Mount conflict detection | Tested | Needs `findmnt` alternative | Not supported |
+| Bind propagation for mounts | Tested | Untested (Docker Desktop) | Untested |
+
+Primary development and testing is on Linux. macOS and Windows support is architecturally present but needs testing on those platforms. See the [deployment guide](docs/deployment-guide.md) for details.
+
 ## Development
 
 ```bash

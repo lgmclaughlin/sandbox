@@ -91,7 +91,7 @@ def start(attach: bool = True, env_profile: str = "", workspace: str | None = No
     mounts = load_mounts()
     if mounts:
         typer.echo("Setting up mounts...")
-        results = setup_mounts()
+        results = setup_mounts(workspace=workspace_path)
         for r in results:
             if r["ok"]:
                 typer.echo(f"  {r['name']}: mounted")
