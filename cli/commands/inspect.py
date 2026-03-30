@@ -3,13 +3,13 @@
 import typer
 import yaml
 
-from cli.lib.paths import get_data_dir
+from cli.lib.config import get_config_root
 
 app = typer.Typer(no_args_is_help=True)
 
 
 def _inspection_file():
-    return get_data_dir() / "config" / "network" / "inspection.yaml"
+    return get_config_root() / "network" / "inspection.yaml"
 
 
 def _load_rules() -> list[dict]:

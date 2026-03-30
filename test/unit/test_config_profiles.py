@@ -3,31 +3,29 @@
 from cli.lib.config import get_active_profile, load_env
 
 
+def _patch_config(monkeypatch, tmp_path):
+    """Patch config to use tmp_path for all path resolution."""
+    monkeypatch.setattr("cli.lib.config.ENV_FILE", tmp_path / ".env")
+    monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", tmp_path / ".env.dist")
+    monkeypatch.setattr("cli.lib.config._active_project", "")
+    monkeypatch.setattr("cli.lib.config.get_data_dir", lambda: tmp_path)
+
+
 class TestProfileMerging:
     def test_no_profile(self, tmp_path, monkeypatch):
-        env_file = tmp_path / ".env"
-        env_file.write_text("COMPOSE_PROJECT_NAME=test\n")
-        dist_file = tmp_path / ".env.dist"
-
-        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
-        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", dist_file)
-        monkeypatch.setattr("cli.lib.config.PROJECT_ROOT", tmp_path)
+        (tmp_path / ".env").write_text("COMPOSE_PROJECT_NAME=test\n")
+        _patch_config(monkeypatch, tmp_path)
         monkeypatch.delenv("SANDBOX_ENV", raising=False)
 
         env = load_env()
         assert env["COMPOSE_PROJECT_NAME"] == "test"
 
     def test_profile_overrides(self, tmp_path, monkeypatch):
-        dist = tmp_path / ".env.dist"
-        dist.write_text("COMPOSE_PROJECT_NAME=default\nSANDBOX_LOG_FORMAT=text\n")
-        env_file = tmp_path / ".env"
-        env_file.write_text("SANDBOX_ENV=corp\n")
-        corp_file = tmp_path / ".env.corp"
-        corp_file.write_text("SANDBOX_LOG_FORMAT=json\nCUSTOM_VAR=corporate\n")
+        (tmp_path / ".env.dist").write_text("COMPOSE_PROJECT_NAME=default\nSANDBOX_LOG_FORMAT=text\n")
+        (tmp_path / ".env").write_text("SANDBOX_ENV=corp\n")
+        (tmp_path / ".env.corp").write_text("SANDBOX_LOG_FORMAT=json\nCUSTOM_VAR=corporate\n")
 
-        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
-        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", dist)
-        monkeypatch.setattr("cli.lib.config.PROJECT_ROOT", tmp_path)
+        _patch_config(monkeypatch, tmp_path)
         monkeypatch.delenv("SANDBOX_ENV", raising=False)
 
         env = load_env()
@@ -36,45 +34,31 @@ class TestProfileMerging:
         assert env["COMPOSE_PROJECT_NAME"] == "default"
 
     def test_env_var_override(self, tmp_path, monkeypatch):
-        dist = tmp_path / ".env.dist"
-        dist.write_text("SANDBOX_LOG_FORMAT=text\n")
-        env_file = tmp_path / ".env"
-        env_file.write_text("")
-        dev_file = tmp_path / ".env.dev"
-        dev_file.write_text("SANDBOX_LOG_FORMAT=json\n")
+        (tmp_path / ".env.dist").write_text("SANDBOX_LOG_FORMAT=text\n")
+        (tmp_path / ".env").write_text("")
+        (tmp_path / ".env.dev").write_text("SANDBOX_LOG_FORMAT=json\n")
 
-        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
-        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", dist)
-        monkeypatch.setattr("cli.lib.config.PROJECT_ROOT", tmp_path)
+        _patch_config(monkeypatch, tmp_path)
         monkeypatch.setenv("SANDBOX_ENV", "dev")
 
         env = load_env()
         assert env["SANDBOX_LOG_FORMAT"] == "json"
 
     def test_missing_profile_file(self, tmp_path, monkeypatch):
-        env_file = tmp_path / ".env"
-        env_file.write_text("SANDBOX_ENV=nonexistent\nFOO=bar\n")
-        dist = tmp_path / ".env.dist"
+        (tmp_path / ".env").write_text("SANDBOX_ENV=nonexistent\nFOO=bar\n")
 
-        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
-        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", dist)
-        monkeypatch.setattr("cli.lib.config.PROJECT_ROOT", tmp_path)
+        _patch_config(monkeypatch, tmp_path)
         monkeypatch.delenv("SANDBOX_ENV", raising=False)
 
         env = load_env()
         assert env["FOO"] == "bar"
 
     def test_merge_order_dist_then_env_then_profile(self, tmp_path, monkeypatch):
-        dist = tmp_path / ".env.dist"
-        dist.write_text("A=from_dist\nB=from_dist\nC=from_dist\n")
-        env_file = tmp_path / ".env"
-        env_file.write_text("B=from_env\nSANDBOX_ENV=test\n")
-        profile = tmp_path / ".env.test"
-        profile.write_text("C=from_profile\n")
+        (tmp_path / ".env.dist").write_text("A=from_dist\nB=from_dist\nC=from_dist\n")
+        (tmp_path / ".env").write_text("B=from_env\nSANDBOX_ENV=test\n")
+        (tmp_path / ".env.test").write_text("C=from_profile\n")
 
-        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
-        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", dist)
-        monkeypatch.setattr("cli.lib.config.PROJECT_ROOT", tmp_path)
+        _patch_config(monkeypatch, tmp_path)
         monkeypatch.delenv("SANDBOX_ENV", raising=False)
 
         env = load_env()
@@ -85,25 +69,17 @@ class TestProfileMerging:
 
 class TestGetActiveProfile:
     def test_returns_profile(self, tmp_path, monkeypatch):
-        env_file = tmp_path / ".env"
-        env_file.write_text("SANDBOX_ENV=corp\n")
-        dist = tmp_path / ".env.dist"
+        (tmp_path / ".env").write_text("SANDBOX_ENV=corp\n")
 
-        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
-        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", dist)
-        monkeypatch.setattr("cli.lib.config.PROJECT_ROOT", tmp_path)
+        _patch_config(monkeypatch, tmp_path)
         monkeypatch.delenv("SANDBOX_ENV", raising=False)
 
         assert get_active_profile() == "corp"
 
     def test_returns_empty(self, tmp_path, monkeypatch):
-        env_file = tmp_path / ".env"
-        env_file.write_text("FOO=bar\n")
-        dist = tmp_path / ".env.dist"
+        (tmp_path / ".env").write_text("FOO=bar\n")
 
-        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
-        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", dist)
-        monkeypatch.setattr("cli.lib.config.PROJECT_ROOT", tmp_path)
+        _patch_config(monkeypatch, tmp_path)
         monkeypatch.delenv("SANDBOX_ENV", raising=False)
 
         assert get_active_profile() == ""

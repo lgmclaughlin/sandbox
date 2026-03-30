@@ -54,13 +54,13 @@ def filter_cmd(
         typer.echo(f"Available layers: {', '.join(sorted(VALID_LAYERS))}")
         return
 
-    if layers != "all":
+    if layers not in ("all", "none"):
         requested = {l.strip() for l in layers.split(",")}
         invalid = requested - VALID_LAYERS
         if invalid:
             typer.echo(typer.style(f"error: Unknown layers: {', '.join(invalid)}",
                                    fg=typer.colors.RED), err=True)
-            typer.echo(f"Available: {', '.join(sorted(VALID_LAYERS))}")
+            typer.echo(f"Available: {', '.join(sorted(VALID_LAYERS))}, all, none")
             raise typer.Exit(1)
 
     from dotenv import set_key as dotenv_set_key

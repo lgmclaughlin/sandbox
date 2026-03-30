@@ -26,7 +26,8 @@ class TestListMcpServers:
             "command: node\n"
             "args: [server.js]\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         servers = list_mcp_servers()
         assert len(servers) == 1
@@ -35,12 +36,14 @@ class TestListMcpServers:
     def test_empty_dir(self, tmp_path, monkeypatch):
         mcp_dir = tmp_path / "config" / "mcp"
         mcp_dir.mkdir(parents=True)
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         assert list_mcp_servers() == []
 
     def test_missing_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path / "nonexistent")
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "nonexistent" / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path / "nonexistent")
         assert list_mcp_servers() == []
 
 
@@ -51,7 +54,8 @@ class TestLoadMcpServer:
         (mcp_dir / "my-server.yaml").write_text(
             "name: my-server\ncommand: python\nargs: [server.py]\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         server = load_mcp_server("my-server")
         assert server is not None
@@ -60,7 +64,8 @@ class TestLoadMcpServer:
     def test_load_missing(self, tmp_path, monkeypatch):
         mcp_dir = tmp_path / "config" / "mcp"
         mcp_dir.mkdir(parents=True)
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         assert load_mcp_server("nonexistent") is None
 
@@ -75,7 +80,8 @@ class TestGetEnabledServers:
         (mcp_dir / "disabled.yaml").write_text(
             "name: disabled\nenabled: false\ncommand: node\nargs: [b.js]\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         enabled = get_enabled_servers()
         assert len(enabled) == 1
@@ -87,7 +93,8 @@ class TestGetEnabledServers:
         (mcp_dir / "server.yaml").write_text(
             "name: server\ncommand: node\nargs: [s.js]\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         enabled = get_enabled_servers()
         assert len(enabled) == 1
@@ -100,7 +107,8 @@ class TestSetServerEnabled:
         (mcp_dir / "server.yaml").write_text(
             "name: server\nenabled: true\ncommand: node\nargs: [s.js]\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         assert set_server_enabled("server", False) is True
         data = yaml.safe_load((mcp_dir / "server.yaml").read_text())
@@ -113,7 +121,8 @@ class TestSetServerEnabled:
     def test_missing_server(self, tmp_path, monkeypatch):
         mcp_dir = tmp_path / "config" / "mcp"
         mcp_dir.mkdir(parents=True)
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         assert set_server_enabled("nope", True) is False
 
@@ -125,7 +134,8 @@ class TestGenerateMcpConfig:
         (mcp_dir / "test.yaml").write_text(
             "name: test\nenabled: true\ncommand: node\nargs: [server.js, --port, '3000']\nenv: {}\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         config = generate_mcp_config()
         assert "test" in config["mcpServers"]
@@ -139,7 +149,8 @@ class TestGenerateMcpConfig:
         (mcp_dir / "off.yaml").write_text(
             "name: off\nenabled: false\ncommand: node\nargs: [s.js]\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         config = generate_mcp_config()
         assert config["mcpServers"] == {}
@@ -150,7 +161,8 @@ class TestGenerateMcpConfig:
         (mcp_dir / "bad.yaml").write_text(
             "name: bad\nenabled: true\ncommand: ''\nargs: []\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         config = generate_mcp_config()
         assert config["mcpServers"] == {}
@@ -168,7 +180,8 @@ class TestGetMcpDomains:
             "name: b\nenabled: true\ncommand: x\nargs: []\n"
             "firewall:\n  domains:\n    - api.b.com\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         domains = get_mcp_domains()
         assert "api.a.com" in domains
@@ -182,6 +195,7 @@ class TestGetMcpDomains:
             "name: off\nenabled: false\ncommand: x\nargs: []\n"
             "firewall:\n  domains:\n    - should.not.appear\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
 
         assert get_mcp_domains() == []

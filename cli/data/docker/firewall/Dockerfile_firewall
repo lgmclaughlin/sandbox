@@ -15,19 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ulogd2 \
   && rm -rf /var/lib/apt/lists/*
 
-COPY firewall-init.sh /usr/local/bin/firewall-init.sh
-RUN chmod +x /usr/local/bin/firewall-init.sh
-
-COPY firewall-apply.sh /usr/local/bin/firewall-apply.sh
-RUN chmod +x /usr/local/bin/firewall-apply.sh
-
-COPY firewall-log.sh /usr/local/bin/firewall-log.sh
-RUN chmod +x /usr/local/bin/firewall-log.sh
-
+COPY --chmod=755 firewall-init.sh firewall-apply.sh firewall-log.sh entrypoint-firewall.sh /usr/local/bin/
 COPY ulogd.conf /etc/ulogd.conf
-
-COPY entrypoint-firewall.sh /usr/local/bin/entrypoint-firewall.sh
-RUN chmod +x /usr/local/bin/entrypoint-firewall.sh
 
 RUN mkdir -p /etc/firewall /var/log/sandbox/firewall
 

@@ -5,14 +5,13 @@ from pathlib import Path
 
 import yaml
 
-from cli.lib.config import get_default_tool, load_env, load_tool_definition
-from cli.lib.paths import get_data_dir
+from cli.lib.config import get_config_root, get_default_tool, get_project_root, load_env, load_tool_definition
 
 MCP_LOG_WRAPPER = "/usr/local/bin/mcp-log-wrapper"
 
 
 def _mcp_dir() -> Path:
-    return get_data_dir() / "config" / "mcp"
+    return get_config_root() / "mcp"
 
 
 def list_mcp_servers() -> list[dict]:
@@ -117,7 +116,7 @@ def write_mcp_config(tool_name: str | None = None) -> Path | None:
     config = generate_mcp_config(tool.get("name"))
     config_path = Path(config_path_str)
 
-    output = get_data_dir() / "mcp-config.json"
+    output = get_project_root() / "mcp-config.json"
     output.write_text(json.dumps(config, indent=2) + "\n")
 
     return output

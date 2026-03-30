@@ -8,7 +8,7 @@ from pathlib import Path
 import docker
 from docker.errors import DockerException, NotFound
 
-from cli.lib.config import load_env, get_active_project_name
+from cli.lib.config import get_config_root, load_env, get_active_project_name
 from cli.lib.paths import get_data_dir
 
 import yaml
@@ -113,7 +113,7 @@ def _generate_override() -> None:
         )
         has_overrides = True
 
-        inspection_file = get_data_dir() / "config" / "network" / "inspection.yaml"
+        inspection_file = get_config_root() / "network" / "inspection.yaml"
         if inspection_file.exists():
             proxy = override["services"].setdefault("proxy", {})
             proxy.setdefault("volumes", []).append(

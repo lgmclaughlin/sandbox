@@ -149,6 +149,8 @@ class EventLogger:
         """Check if the layer for this event type is enabled."""
         if self.enabled_layers == "all":
             return True
+        if self.enabled_layers == "none":
+            return False
         enabled = {l.strip() for l in self.enabled_layers.split(",")}
         layer = EVENT_TYPE_LAYERS.get(event_type, "system")
         return layer in enabled

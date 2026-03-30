@@ -14,7 +14,8 @@ class TestPermissionGeneration:
             "allowed_paths:\n  - /workspace\n"
             "validation:\n  blocked_patterns:\n    - '\\.\\./'\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
         monkeypatch.setattr("cli.lib.mcp.load_env", lambda: {
             "SANDBOX_ENFORCE_MCP_PERMISSIONS": "false",
         })
@@ -33,7 +34,8 @@ class TestPermissionGeneration:
             "validation:\n  blocked_patterns:\n    - '\\.\\./'\n    - '/etc/'\n"
             "permissions:\n  - filesystem: read\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
         monkeypatch.setattr("cli.lib.mcp.load_env", lambda: {
             "SANDBOX_ENFORCE_MCP_PERMISSIONS": "true",
         })
@@ -53,7 +55,8 @@ class TestPermissionGeneration:
         (mcp_dir / "server.yaml").write_text(
             "name: server\nenabled: true\ncommand: node\nargs: [s.js]\nenv: {}\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
         monkeypatch.setattr("cli.lib.mcp.load_env", lambda: {
             "SANDBOX_ENFORCE_MCP_PERMISSIONS": "true",
         })
@@ -76,7 +79,8 @@ class TestPermissionGeneration:
             "allowed_paths: []\n"
             "permissions:\n  - network: read\n"
         )
-        monkeypatch.setattr("cli.lib.mcp.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.mcp.get_config_root", lambda: tmp_path / "config")
+        monkeypatch.setattr("cli.lib.mcp.get_project_root", lambda: tmp_path)
         monkeypatch.setattr("cli.lib.mcp.load_env", lambda: {
             "SANDBOX_ENFORCE_MCP_PERMISSIONS": "true",
         })

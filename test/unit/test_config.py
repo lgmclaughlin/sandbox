@@ -6,6 +6,9 @@ from cli.lib.config import (
     detect_timezone,
     ensure_env,
     ensure_mounts_config,
+    get_config_root,
+    get_log_dir,
+    get_project_root,
     load_env,
     load_mounts,
     load_tool_definition,
@@ -186,6 +189,58 @@ class TestToolDefinitions:
         monkeypatch.setattr("cli.lib.config.TOOLS_DIR", tools_dir)
 
         assert get_default_tool() is None
+
+
+class TestProjectRootHelpers:
+    def test_no_project_returns_data_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("cli.lib.config._active_project", "")
+        monkeypatch.setattr("cli.lib.config.get_data_dir", lambda: tmp_path)
+
+        assert get_project_root() == tmp_path
+
+    def test_active_project_returns_project_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("cli.lib.config._active_project", "billing")
+        monkeypatch.setattr("cli.lib.config.get_data_dir", lambda: tmp_path)
+
+        assert get_project_root() == tmp_path / "projects" / "billing"
+
+    def test_config_root_no_project(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("cli.lib.config._active_project", "")
+        monkeypatch.setattr("cli.lib.config.get_data_dir", lambda: tmp_path)
+
+        assert get_config_root() == tmp_path / "config"
+
+    def test_config_root_with_project(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("cli.lib.config._active_project", "billing")
+        monkeypatch.setattr("cli.lib.config.get_data_dir", lambda: tmp_path)
+
+        assert get_config_root() == tmp_path / "projects" / "billing" / "config"
+
+    def test_log_dir_relative_with_project(self, tmp_path, monkeypatch):
+        project_dir = tmp_path / "projects" / "billing"
+        project_dir.mkdir(parents=True)
+        env_file = project_dir / ".env"
+        env_file.write_text("SANDBOX_LOG_DIR=./logs\n")
+
+        monkeypatch.setattr("cli.lib.config._active_project", "billing")
+        monkeypatch.setattr("cli.lib.config.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
+        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", tmp_path / ".env.dist")
+        monkeypatch.delenv("SANDBOX_ENV", raising=False)
+
+        assert get_log_dir() == project_dir / "logs"
+
+    def test_log_dir_relative_no_project(self, tmp_path, monkeypatch):
+        env_file = tmp_path / ".env"
+        env_file.write_text("SANDBOX_LOG_DIR=./logs\n")
+
+        monkeypatch.setattr("cli.lib.config._active_project", "")
+        monkeypatch.setattr("cli.lib.config.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.config.ENV_FILE", env_file)
+        monkeypatch.setattr("cli.lib.config.ENV_DIST_FILE", tmp_path / ".env.dist")
+        monkeypatch.delenv("SANDBOX_ENV", raising=False)
+
+        assert get_log_dir() == tmp_path / "logs"
 
 
 class TestDetectTimezone:

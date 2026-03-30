@@ -14,6 +14,7 @@ import cli.lib.config as config
 from cli.lib.config import (
     get_active_profile,
     get_active_project_name,
+    get_project_root,
     load_env,
     load_mounts,
     list_available_tools,
@@ -107,7 +108,7 @@ def profiles() -> None:
     active = get_active_profile()
 
     found = False
-    for env_file in sorted(get_data_dir().glob(".env.*")):
+    for env_file in sorted(get_project_root().glob(".env.*")):
         if env_file.name == ".env.dist":
             continue
         profile_name = env_file.name.removeprefix(".env.")
@@ -125,8 +126,8 @@ def create_profile(
     from_profile: Optional[str] = typer.Option(None, "--from", help="Copy from existing profile"),
 ) -> None:
     """Create a new environment profile."""
-    data_dir = get_data_dir()
-    profile_file = data_dir / f".env.{name}"
+    project_dir = get_project_root()
+    profile_file = project_dir / f".env.{name}"
 
     if profile_file.exists():
         typer.echo(typer.style(f"error: Profile '{name}' already exists.",
@@ -134,7 +135,7 @@ def create_profile(
         raise typer.Exit(1)
 
     if from_profile:
-        source = data_dir / f".env.{from_profile}"
+        source = project_dir / f".env.{from_profile}"
         if not source.exists():
             typer.echo(typer.style(f"error: Source profile '{from_profile}' not found.",
                                    fg=typer.colors.RED), err=True)
@@ -153,7 +154,8 @@ def edit(
 ) -> None:
     """Open configuration in editor."""
     if project:
-        env_file = get_data_dir() / "projects" / project / ".env"
+        from cli.lib.project import get_project_dir
+        env_file = get_project_dir(project) / ".env"
     else:
         env_file = config.ENV_FILE
 
@@ -208,7 +210,7 @@ def import_config(
         raise typer.Exit(1)
 
     data = json.loads(input_path.read_text())
-    data_dir = get_data_dir()
+    data_dir = get_project_root()
 
     if "env" in data:
         from dotenv import set_key as dotenv_set_key

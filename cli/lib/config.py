@@ -47,7 +47,7 @@ def set_active_project(name: str) -> None:
     if not name:
         _init_paths()
     else:
-        project_dir = PROJECT_ROOT / "projects" / name
+        project_dir = get_data_dir() / "projects" / name
         CONFIG_DIR = project_dir / "config"
         MOUNTS_FILE = CONFIG_DIR / "mounts.yaml"
         TOOLS_DIR = CONFIG_DIR / "tools"
@@ -60,13 +60,27 @@ def get_active_project_name() -> str:
     return _active_project
 
 
+def get_project_root() -> Path:
+    """Active project dir, or root data dir if no project."""
+    if _active_project:
+        return get_data_dir() / "projects" / _active_project
+    return get_data_dir()
+
+
+def get_config_root() -> Path:
+    """Active project's config dir, or root config dir."""
+    return get_project_root() / "config"
+
+
 def get_log_dir() -> Path:
     """Get log directory from env or default."""
     env = load_env()
     log_dir = env.get("SANDBOX_LOG_DIR", "")
     if log_dir:
         path = Path(log_dir)
-        return path if path.is_absolute() else PROJECT_ROOT / path
+        if path.is_absolute():
+            return path
+        return get_project_root() / path
     return DEFAULT_LOG_DIR
 
 
@@ -169,7 +183,7 @@ def load_env() -> dict[str, str]:
 
     profile = result.get("SANDBOX_ENV") or os.environ.get("SANDBOX_ENV", "")
     if profile:
-        profile_file = PROJECT_ROOT / f".env.{profile}"
+        profile_file = get_project_root() / f".env.{profile}"
         if profile_file.exists():
             for k, v in dotenv_values(profile_file).items():
                 if v is not None:
