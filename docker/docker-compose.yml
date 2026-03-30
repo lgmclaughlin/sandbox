@@ -4,6 +4,7 @@ services:
       context: ./firewall
       dockerfile: Dockerfile_firewall
     container_name: ${COMPOSE_PROJECT_NAME:-project}_firewall
+    hostname: ${COMPOSE_PROJECT_NAME:-project}-sandbox
     network_mode: bridge
     security_opt:
       - no-new-privileges:false

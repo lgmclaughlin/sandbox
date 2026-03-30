@@ -25,6 +25,7 @@ class TestGenerateOverride:
     def _setup(self, tmp_path, monkeypatch):
         (tmp_path / "docker").mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr("cli.lib.docker.get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("cli.lib.config.list_available_tools", lambda: [])
 
     def test_no_overrides(self, tmp_path, monkeypatch):
         self._setup(tmp_path, monkeypatch)

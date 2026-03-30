@@ -9,7 +9,7 @@ import yaml
 
 import cli.lib.config as config
 from cli.lib.config import list_available_tools, load_tool_definition
-from cli.lib.docker import exec_in_sandbox, is_running
+from cli.lib.docker import copy_to_container, exec_in_sandbox, is_running
 from cli.lib.firewall import merge_tool_domains, read_whitelist, remove_domain, apply_rules
 
 app = typer.Typer(no_args_is_help=True)
@@ -29,8 +29,13 @@ def list_tools() -> None:
         return
 
     for tool in tools:
-        default = typer.style(" (default)", fg=typer.colors.BLUE) if tool.get("default") else ""
-        typer.echo(f"  {tool['name']}: {tool.get('description', '')}{default}")
+        tags = []
+        if tool.get("default"):
+            tags.append(typer.style("default", fg=typer.colors.BLUE))
+        if tool.get("install", {}).get("auto"):
+            tags.append(typer.style("auto", fg=typer.colors.CYAN))
+        suffix = f" ({', '.join(tags)})" if tags else ""
+        typer.echo(f"  {tool['name']}: {tool.get('description', '')}{suffix}")
 
         domains = tool.get("firewall", {}).get("domains", [])
         if domains:
@@ -150,6 +155,7 @@ def add(
     domains: Optional[str] = typer.Option(None, help="Comma-separated firewall domains"),
     env: Optional[str] = typer.Option(None, help="Comma-separated env vars (KEY=val,KEY2=val2)"),
     default: bool = typer.Option(False, "--default", help="Set as default tool"),
+    auto: bool = typer.Option(False, "--auto", help="Auto-install on sandbox start"),
 ) -> None:
     """Create a new tool definition."""
     tool_file = config.TOOLS_DIR / f"{name}.yaml"
@@ -162,7 +168,7 @@ def add(
         "name": name,
         "description": "",
         "default": default,
-        "install": {"method": method, "package": package, "global": method == "npm"},
+        "install": {"method": method, "package": package, "global": method == "npm", "auto": auto},
         "firewall": {"domains": domains.split(",") if domains else []},
         "env": {},
         "mcp": {"config_path": ""},
@@ -207,6 +213,150 @@ def show(
         raise typer.Exit(1)
 
     typer.echo(yaml.dump(definition, default_flow_style=False).rstrip())
+
+
+@app.command()
+def auth(
+    name: str = typer.Argument(..., help="Tool name to authenticate"),
+) -> None:
+    """Authenticate a tool on the host and sync credentials to the container."""
+    import shutil
+    from pathlib import Path
+
+    definition = load_tool_definition(name)
+    if not definition:
+        typer.echo(typer.style(f"error: No tool definition found for '{name}'.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    auth_cfg = definition.get("auth")
+    if not auth_cfg:
+        typer.echo(typer.style(f"error: Tool '{name}' has no auth configuration.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    host_cmd = auth_cfg.get("command", "")
+    if not host_cmd:
+        typer.echo(typer.style("error: Auth config missing 'command'.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    binary = host_cmd.split()[0]
+    if not shutil.which(binary):
+        typer.echo(typer.style(
+            f"error: '{binary}' not found on the host. Install it first to authenticate.",
+            fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    if not is_running("sandbox"):
+        typer.echo(typer.style("error: Sandbox is not running. Run 'sandbox start' first.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Running '{host_cmd}' on host...")
+    result = subprocess.run(host_cmd.split(), stdin=None)
+    if result.returncode != 0:
+        typer.echo(typer.style(f"error: Auth command failed (exit {result.returncode}).",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    sync_cfg = auth_cfg.get("sync", {})
+    host_dir = sync_cfg.get("host", "")
+    container_dir = sync_cfg.get("container", "")
+
+    if not host_dir or not container_dir:
+        typer.echo(typer.style("error: Auth config missing sync paths.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    host_path = Path(host_dir).expanduser()
+    if not host_path.exists():
+        typer.echo(typer.style(f"error: Host credential path not found: {host_path}",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    # Filter to only credential files if specified, otherwise sync all
+    files_filter = sync_cfg.get("files")
+
+    if files_filter:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for pattern in files_filter:
+                for match in host_path.glob(pattern):
+                    if match.is_file():
+                        dest = tmp_path / match.name
+                        shutil.copy2(str(match), str(dest))
+
+            if not any(tmp_path.iterdir()):
+                typer.echo(typer.style("warning: No credential files matched the filter.",
+                                       fg=typer.colors.YELLOW))
+                raise typer.Exit(1)
+
+            typer.echo(f"Syncing credentials to container:{container_dir}...")
+            ok = copy_to_container(tmp_path, container_dir)
+    else:
+        typer.echo(f"Syncing {host_path} to container:{container_dir}...")
+        ok = copy_to_container(host_path, container_dir)
+
+    if ok:
+        # Fix ownership inside container (files arrive as root from docker cp)
+        exec_in_sandbox(["bash", "-c", f"chown -R $(id -u):$(id -g) {container_dir}"])
+        typer.echo(typer.style(f"Credentials synced for {name}.", fg=typer.colors.GREEN))
+    else:
+        typer.echo(typer.style("error: Failed to copy credentials to container.",
+                               fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+
+def auto_install_tools() -> list[dict]:
+    """Install tools marked with auto: true that aren't already installed.
+
+    Returns list of results: [{"name": ..., "ok": bool, "error": str}]
+    """
+    results = []
+    for tool in list_available_tools():
+        install_cfg = tool.get("install", {})
+        if not install_cfg.get("auto"):
+            continue
+
+        name = tool["name"]
+        method = install_cfg.get("method")
+        package = install_cfg.get("package")
+
+        if not method or not package:
+            continue
+
+        if _is_tool_installed(method, package):
+            continue
+
+        if method not in INSTALL_COMMANDS:
+            results.append({"name": name, "ok": False, "error": f"Unknown method '{method}'"})
+            continue
+
+        cmd = INSTALL_COMMANDS[method](package, install_cfg.get("global", False))
+        exit_code, output = exec_in_sandbox(cmd)
+
+        if exit_code == 0:
+            results.append({"name": name, "ok": True, "error": ""})
+        else:
+            results.append({"name": name, "ok": False, "error": output.strip().split("\n")[-1]})
+
+    return results
+
+
+def _is_tool_installed(method: str, package: str) -> bool:
+    """Check if a tool package is already installed in the container."""
+    if method == "npm":
+        cmd = ["npm", "list", "-g", "--depth=0", package]
+    elif method == "pip":
+        cmd = ["pip", "show", package]
+    else:
+        return False
+
+    exit_code, _ = exec_in_sandbox(cmd)
+    return exit_code == 0
 
 
 def _get_all_tool_domains_except(exclude_name: str) -> set[str]:

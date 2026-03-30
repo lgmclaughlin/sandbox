@@ -7,10 +7,21 @@ install:
   method: npm
   package: "@anthropic-ai/claude-code"
   global: true
+  auto: true
+
+auth:
+  command: claude auth login
+  sync:
+    host: ~/.claude
+    container: /home/node/.claude
+    files:
+      - "*.json"
+      - ".credentials*"
 
 firewall:
   domains:
     - api.anthropic.com
+    - console.anthropic.com
     - registry.npmjs.org
 
 env:

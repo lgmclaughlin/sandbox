@@ -26,6 +26,7 @@ from cli.lib.docker import (
 from cli.lib.firewall import merge_tool_domains
 from cli.lib.mcp import get_enabled_servers, get_mcp_domains, write_mcp_config
 from cli.lib.mounts import setup_mounts, unmount_all
+from cli.commands.tools import auto_install_tools
 from cli.lib.paths import get_data_dir
 from cli.lib.platform import check_docker, is_quiet
 from cli.lib.scaffold import is_scaffolded, scaffold
@@ -105,6 +106,14 @@ def start(attach: bool = True, env_profile: str = "", workspace: str | None = No
 
     typer.echo("Starting containers...")
     start_containers(build=not is_running("firewall"), secrets=container_secrets, offline=offline)
+
+    auto_results = auto_install_tools()
+    for r in auto_results:
+        if r["ok"]:
+            typer.echo(f"  Auto-installed {r['name']}")
+        else:
+            typer.echo(typer.style(f"  Failed to auto-install {r['name']}: {r['error']}",
+                                   fg=typer.colors.YELLOW), err=True)
 
     typer.echo(typer.style("Sandbox is running.", fg=typer.colors.GREEN))
 

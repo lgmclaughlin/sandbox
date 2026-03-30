@@ -30,8 +30,8 @@ RUN if [ -n "$CUSTOM_CA_CERT_PATH" ] && [ -f "$CUSTOM_CA_CERT_PATH" ]; then \
   && update-ca-certificates; \
   fi
 
-RUN mkdir -p /workspace /home/node/.local \
-    && chown -R node:node /workspace /home/node/.local
+RUN mkdir -p /workspace /home/node/.local /home/node/.claude \
+    && chown -R node:node /workspace /home/node/.local /home/node/.claude
 
 WORKDIR /workspace
 
@@ -56,6 +56,11 @@ ENV EDITOR=nvim
 ENV VISUAL=nvim
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
+
+RUN npm install -g @anthropic-ai/claude-code
+
+# Symlink .claude.json into the persisted volume so it survives container recreation
+RUN ln -s /home/node/.claude/.claude.json /home/node/.claude.json
 
 RUN echo "alias ls='exa -la --group-directories-first'" >> ~/.bashrc
 RUN echo 'export PATH=/usr/local/share/npm-global/bin:$PATH' >> ~/.bashrc

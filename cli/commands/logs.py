@@ -10,13 +10,14 @@ import typer
 
 from cli.lib.config import get_log_dir, load_env
 from cli.lib.docker import is_running
+from cli.lib.firewall import read_firewall_logs
 
 app = typer.Typer(no_args_is_help=True)
 
 
 @app.command(name="view")
 def view_cmd(
-    log_type: str = typer.Argument("all", help="Log type: sessions, commands, or all"),
+    log_type: str = typer.Argument("all", help="Log type: sessions, commands, firewall, mcp, proxy, or all"),
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
     lines: int = typer.Option(50, "--lines", "-n", help="Number of lines to show"),
     session: str = typer.Option("", "--session", "-s", help="View all events for a session ID"),
@@ -162,7 +163,7 @@ def view(
                    err=True)
         raise typer.Exit(1)
 
-    valid_types = {"sessions", "commands", "all"}
+    valid_types = {"sessions", "commands", "firewall", "mcp", "proxy", "all"}
     if log_type not in valid_types:
         typer.echo(typer.style(
             f"error: Unknown log type '{log_type}'. Use: {', '.join(sorted(valid_types))}",
@@ -183,6 +184,27 @@ def view(
     if log_type in ("commands", "all"):
         typer.echo(typer.style("Command history:", bold=True))
         _view_commands(log_dir / "commands", lines)
+
+    if log_type == "all":
+        typer.echo("")
+
+    if log_type in ("firewall", "all"):
+        typer.echo(typer.style("Firewall:", bold=True))
+        _view_firewall(log_dir, lines)
+
+    if log_type == "all":
+        typer.echo("")
+
+    if log_type in ("mcp", "all"):
+        typer.echo(typer.style("MCP:", bold=True))
+        _view_jsonl_entries(log_dir / "mcp", lines, _format_mcp_entry)
+
+    if log_type == "all":
+        typer.echo("")
+
+    if log_type in ("proxy", "all"):
+        typer.echo(typer.style("Proxy:", bold=True))
+        _view_jsonl_entries(log_dir / "proxy", lines, _format_proxy_entry)
 
 
 def _collect_files(base_dir: Path, pattern: str) -> list[Path]:
@@ -261,6 +283,83 @@ def _view_commands(commands_dir: Path, lines: int) -> None:
             typer.echo(f"  {f.name} ({count} commands, json)")
         else:
             typer.echo(f"  {f.name} ({f.stat().st_size} bytes)")
+
+
+def _view_firewall(log_dir: Path, lines: int) -> None:
+    """View firewall log entries."""
+    entries = read_firewall_logs(log_dir, action="all", lines=lines)
+    if not entries:
+        typer.echo("  No firewall logs found.")
+        return
+
+    for entry in entries:
+        event_type = entry.get("event_type", "unknown")
+        payload = entry.get("payload", {})
+        dst = payload.get("dst", "?")
+        dpt = payload.get("port", "?")
+        proto = payload.get("proto", "?")
+        ts = entry.get("timestamp", "")
+
+        if "allow" in event_type:
+            action_str = typer.style("ALLOW", fg=typer.colors.GREEN)
+        else:
+            action_str = typer.style("BLOCK", fg=typer.colors.RED)
+
+        typer.echo(f"  {action_str} {dst}:{dpt} ({proto}) {ts}")
+
+
+def _view_jsonl_entries(log_dir: Path, lines: int, formatter) -> None:
+    """Read JSONL log entries and display with a formatter function."""
+    if not log_dir.exists():
+        typer.echo("  No logs found.")
+        return
+
+    entries = []
+    for log_file in sorted(log_dir.rglob("*.jsonl"), reverse=True):
+        for line in reversed(log_file.read_text().splitlines()):
+            if not line.strip():
+                continue
+            try:
+                entries.append(json.loads(line))
+                if len(entries) >= lines:
+                    break
+            except json.JSONDecodeError:
+                continue
+        if len(entries) >= lines:
+            break
+
+    if not entries:
+        typer.echo("  No log entries found.")
+        return
+
+    for entry in reversed(entries):
+        typer.echo(f"  {formatter(entry)}")
+
+
+def _format_mcp_entry(entry: dict) -> str:
+    ts = entry.get("timestamp", "?")
+    server = entry.get("server", "?")
+    direction = entry.get("direction", "?")
+    method = entry.get("method", "")
+    tool = entry.get("tool", "")
+    label = tool or method or direction
+    return f"[{ts}] {server} {label}"
+
+
+def _format_proxy_entry(entry: dict) -> str:
+    payload = entry.get("payload", {})
+    ts = entry.get("timestamp", "?")
+    method = payload.get("method", "?")
+    url = payload.get("url", "?")
+    blocked = payload.get("blocked", False)
+    status = payload.get("status_code", "")
+    if blocked:
+        action = typer.style("BLOCKED", fg=typer.colors.RED)
+    elif status:
+        action = typer.style(str(status), fg=typer.colors.GREEN)
+    else:
+        action = "->"
+    return f"[{ts}] {action} {method} {url}"
 
 
 def _view_session(log_dir: Path, session_id: str) -> None:

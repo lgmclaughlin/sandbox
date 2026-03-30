@@ -120,6 +120,23 @@ def _generate_override() -> None:
                 f"{inspection_file}:/etc/proxy/inspection.yaml:ro"
             )
 
+    # Wire tool-defined named volumes into the sandbox container
+    from cli.lib.config import list_available_tools
+    tool_volumes = []
+    top_level_volumes = {}
+    for tool in list_available_tools():
+        for vol in tool.get("volumes", []):
+            container_path = vol.get("container", "")
+            volume_name = vol.get("named", "")
+            if container_path and volume_name:
+                tool_volumes.append(f"{volume_name}:{container_path}")
+                top_level_volumes[volume_name] = None
+    if tool_volumes:
+        sandbox = override["services"].setdefault("sandbox", {})
+        sandbox.setdefault("volumes", []).extend(tool_volumes)
+        override.setdefault("volumes", {}).update(top_level_volumes)
+        has_overrides = True
+
     if has_overrides:
         _compose_override_file().write_text(yaml.dump(override, default_flow_style=False))
     elif _compose_override_file().exists():
@@ -186,11 +203,15 @@ def start_containers(build: bool = False, secrets: dict[str, str] | None = None,
 
     proxy_mode = _is_proxy_mode()
 
-    if not is_running(FIREWALL_SERVICE):
+    firewall_was_running = is_running(FIREWALL_SERVICE)
+
+    if not firewall_was_running:
         subprocess.run([*base, "up", "-d", FIREWALL_SERVICE], env=env, check=True)
 
-    if build or not is_running(FIREWALL_SERVICE):
+    if not firewall_was_running:
         _init_firewall(offline=offline)
+    else:
+        _apply_whitelist(offline=offline)
 
     if proxy_mode and not is_running(PROXY_SERVICE):
         subprocess.run([*base, "up", "-d", PROXY_SERVICE], env=env, check=True)
@@ -226,6 +247,23 @@ def _init_firewall(offline: bool = False) -> None:
         container.put_archive("/etc/firewall", _tar_single_file("whitelist.txt", data))
         if not offline:
             container.exec_run("/usr/local/bin/firewall-apply.sh", privileged=True)
+
+
+def _apply_whitelist(offline: bool = False) -> None:
+    """Push whitelist to an already-running firewall container and apply."""
+    if offline:
+        return
+
+    client = _get_client()
+    container = _get_container(client, FIREWALL_SERVICE)
+    if not container or container.status != "running":
+        return
+
+    whitelist_src = get_data_dir() / "docker" / "firewall" / "whitelist.txt"
+    if whitelist_src.exists():
+        data = whitelist_src.read_bytes()
+        container.put_archive("/etc/firewall", _tar_single_file("whitelist.txt", data))
+        container.exec_run("/usr/local/bin/firewall-apply.sh", privileged=True)
 
 
 def _tar_single_file(name: str, data: bytes) -> bytes:
@@ -376,6 +414,34 @@ def exec_in_sandbox(command: list[str]) -> tuple[int, str]:
         pass
 
     return exit_code, output
+
+
+def copy_to_container(host_path: "Path", container_dir: str) -> bool:
+    """Copy a file or directory from the host into the sandbox container.
+
+    Uses tar archive via Docker SDK to transfer files.
+    Returns True on success.
+    """
+    import io
+    import tarfile
+
+    client = _get_client()
+    container = _get_container(client, SANDBOX_SERVICE)
+    if not container or container.status != "running":
+        return False
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        if host_path.is_dir():
+            for item in host_path.rglob("*"):
+                if item.is_file():
+                    arcname = str(item.relative_to(host_path))
+                    tar.add(str(item), arcname=arcname)
+        else:
+            tar.add(str(host_path), arcname=host_path.name)
+
+    buf.seek(0)
+    return container.put_archive(container_dir, buf.getvalue())
 
 
 def exec_in_firewall(command: list[str]) -> tuple[int, str]:
