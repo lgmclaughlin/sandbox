@@ -39,6 +39,7 @@ RUN mkdir -p /usr/local/share/npm-global/bin \
     && chown -R node:node /usr/local/share/npm-global
 
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
+ENV PATH=/usr/local/share/npm-global/bin:$PATH
 
 COPY --chmod=755 docker/entrypoint.sh docker/session-wrapper.sh /usr/local/bin/
 COPY --chmod=755 docker/mcp-log-wrapper.py /usr/local/bin/mcp-log-wrapper
@@ -57,6 +58,5 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN ln -s /home/node/.claude/.claude.json /home/node/.claude.json
 
 RUN echo "alias ls='exa -la --group-directories-first'" >> ~/.bashrc
-RUN echo 'export PATH=/usr/local/share/npm-global/bin:$PATH' >> ~/.bashrc
 
 CMD ["/usr/local/bin/entrypoint.sh"]

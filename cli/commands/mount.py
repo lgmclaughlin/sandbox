@@ -1,5 +1,6 @@
 """Mount management commands."""
 
+from pathlib import Path
 from typing import Optional
 
 import typer
